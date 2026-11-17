@@ -1,0 +1,171 @@
+#!/usr/bin/env python3
+"""Unprivileged Fedora host collector, bound to 127.0.0.1 only.
+
+Deliberately no generic shell endpoint, no Docker socket passed into the UI.
+Restart is an explicit, name-by-name opt-in via HOMELAB_ALLOWED_CONTAINERS.
+"""
+import hmac
+import json
+import os
+import re
+import socket
+import subprocess
+import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import unquote
+
+import psutil
+
+TOKEN = os.getenv("HOMELAB_AGENT_TOKEN", "")
+PORT = int(os.getenv("HOMELAB_AGENT_PORT", "18765"))
+ALLOWED = {s.strip() for s in os.getenv("HOMELAB_ALLOWED_CONTAINERS", "").split(",") if s.strip()}
+SERVICES = ("docker", "sshd", "firewalld", "NetworkManager", "cloudflared")
+
+
+def run(*args, timeout=5):
+    try:
+        result = subprocess.run(args, capture_output=True, text=True,
+                                timeout=timeout, check=False)
+        return result.returncode, result.stdout.strip(), result.stderr.strip()
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return 127, "", "command not available"
+
+
+def docker_containers():
+    rc, out, err = run("docker", "ps", "-a", "--format", "{{json .}}", timeout=7)
+    if rc != 0:
+        return [], err[:160] or "Docker no disponible"
+    items = []
+    for line in out.splitlines():
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        name = entry.get("Names", "").lstrip("/")
+        items.append({
+            "name": name,
+            "image": entry.get("Image", ""),
+            "state": entry.get("State", "unknown").lower(),
+            "status": entry.get("Status", ""),
+            "id": entry.get("ID", ""),
+            "ports": entry.get("Ports", ""),
+            "restart_allowed": name in ALLOWED,
+        })
+    return items, None
+
+
+def host_snapshot():
+    cpu_percent = psutil.cpu_percent(interval=0.15)
+    memory = psutil.virtual_memory()
+    disks = []
+    seen = set()
+    for part in psutil.disk_partitions(all=False):
+        if part.mountpoint in seen:
+            continue
+        seen.add(part.mountpoint)
+        try:
+            usage = psutil.disk_usage(part.mountpoint)
+            disks.append({"mount": part.mountpoint, "device": part.device,
+                          "fstype": part.fstype, "total": usage.total, "used": usage.used,
+                          "free": usage.free, "percent": usage.percent})
+        except (PermissionError, OSError):
+            continue
+    processes = []
+    for proc in psutil.process_iter(["pid", "name", "memory_info", "username"]):
+        try:
+            info = proc.info
+            rss = info["memory_info"].rss if info["memory_info"] else 0
+            processes.append({"pid": info["pid"], "name": info["name"],
+                              "user": info["username"], "rss": rss})
+        except (psutil.AccessDenied, psutil.NoSuchProcess, OSError):
+            pass
+    processes.sort(key=lambda p: p["rss"], reverse=True)
+    statuses = {}
+    for service in SERVICES:
+        rc, out, _ = run("systemctl", "is-active", service, timeout=2)
+        statuses[service] = out if out else ("unknown" if rc == 127 else "inactive")
+    _, selinux, _ = run("getenforce", timeout=2)
+    containers, docker_error = docker_containers()
+    io = psutil.net_io_counters()
+    temperatures = []
+    try:
+        for sensor, values in psutil.sensors_temperatures().items():
+            for value in values[:3]:
+                if value.current is not None:
+                    temperatures.append({"sensor": sensor, "label": value.label or sensor,
+                                         "celsius": round(float(value.current), 1)})
+    except (AttributeError, OSError):
+        pass
+    return {
+        "hostname": socket.gethostname(),
+        "cpu": {"percent": cpu_percent, "cores": psutil.cpu_count(logical=True),
+                "load": list(os.getloadavg())},
+        "memory": {"total": memory.total, "used": memory.used,
+                   "available": memory.available, "percent": memory.percent},
+        "disks": disks,
+        "processes": processes[:12],
+        "services": statuses,
+        "selinux": selinux.lower() or "unknown",
+        "containers": containers, "docker_error": docker_error,
+        "network": {"bytes_sent": io.bytes_sent, "bytes_recv": io.bytes_recv},
+        "temperatures": temperatures[:12],
+        "uptime_seconds": int(time.time() - psutil.boot_time()),
+        "timestamp": int(time.time()),
+    }
+
+
+def can_restart(name):
+    return bool(re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}", name)) and name in ALLOWED
+
+
+class Handler(BaseHTTPRequestHandler):
+    server_version = "HomeLabOS-Agent"
+
+    def reply(self, status, payload):
+        body = json.dumps(payload, ensure_ascii=False).encode()
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def authorized(self):
+        supplied = self.headers.get("Authorization", "")
+        return bool(TOKEN) and hmac.compare_digest(supplied, "Bearer " + TOKEN)
+
+    def do_GET(self):
+        if not self.authorized():
+            return self.reply(401, {"error": "unauthorized"})
+        if self.path == "/v1/snapshot":
+            try:
+                return self.reply(200, host_snapshot())
+            except Exception:
+                return self.reply(500, {"error": "collector_error"})
+        return self.reply(404, {"error": "not_found"})
+
+    def do_POST(self):
+        if not self.authorized():
+            return self.reply(401, {"error": "unauthorized"})
+        match = re.fullmatch(r"/v1/containers/([^/]+)/restart", self.path)
+        if not match:
+            return self.reply(404, {"error": "not_found"})
+        name = unquote(match.group(1))
+        if not can_restart(name):
+            return self.reply(403, {"error": "not_allowed"})
+        rc, out, err = run("docker", "restart", "--time", "10", name, timeout=20)
+        if rc != 0:
+            return self.reply(502, {"error": "restart_failed", "detail": err[:160]})
+        return self.reply(200, {"ok": True, "container": name})
+
+    def log_message(self, fmt, *args):
+        # Logs omit request headers (including the shared secret).
+        print("%s %s" % (self.address_string(), fmt % args), flush=True)
+
+
+if __name__ == "__main__":
+    if not TOKEN or len(TOKEN) < 32:
+        raise SystemExit("HOMELAB_AGENT_TOKEN must be configured (>=32 chars)")
+    server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
+    print("HomeLab OS host agent listening on 127.0.0.1:%d" % PORT, flush=True)
+    server.serve_forever()

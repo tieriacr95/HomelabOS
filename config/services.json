@@ -1,0 +1,12 @@
+[
+  {
+    "name": "Plex",
+    "url": "http://127.0.0.1:32400/identity",
+    "enabled": false
+  },
+  {
+    "name": "Personal Planner",
+    "url": "http://127.0.0.1:8080/api/health",
+    "enabled": false
+  }
+]

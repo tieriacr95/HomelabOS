@@ -1,0 +1,32 @@
+# Linux/Fedora-only host networking: connects to an agent restricted to 127.0.0.1.
+# The browser and Cloudflare Tunnel access http://127.0.0.1:8090.
+services:
+  homelabos:
+    build: .
+    image: homelabos:local
+    network_mode: host
+    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
+    env_file:
+      - .env
+    environment:
+      HOMELAB_DB_PATH: /data/homelabos.db
+      HOMELAB_FRONTEND_DIR: /app/public
+      HOMELAB_SERVICES_PATH: /config/services.json
+      HOMELAB_AGENT_URL: http://127.0.0.1:18765
+    volumes:
+      - ./data:/data:Z
+      - ./config:/config:ro,Z
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/api/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s

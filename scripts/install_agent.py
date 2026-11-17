@@ -1,0 +1,52 @@
+#!/usr/bin/env python3
+"""Create a least-privilege systemd --user unit for the Fedora collector."""
+import os
+import shlex
+from pathlib import Path
+
+root = Path(__file__).resolve().parent.parent
+env_file = root / ".env"
+if not env_file.is_file():
+    raise SystemExit("Missing .env. Run bash scripts/install.sh first.")
+values = {}
+for line in env_file.read_text().splitlines():
+    if not line or line.startswith("#") or "=" not in line:
+        continue
+    k, v = line.split("=", 1)
+    if k in ("HOMELAB_AGENT_TOKEN", "HOMELAB_ALLOWED_CONTAINERS"):
+        values[k] = v
+token = values.get("HOMELAB_AGENT_TOKEN", "")
+if len(token) < 32:
+    raise SystemExit("HOMELAB_AGENT_TOKEN must contain at least 32 characters.")
+
+config = Path.home() / ".config/homelabos"
+config.mkdir(parents=True, exist_ok=True)
+config.chmod(0o700)
+agent_env = config / "agent.env"
+# Refuse newline injection into systemd EnvironmentFile.
+for value in values.values():
+    if "\n" in value or "\r" in value or '"' in value:
+        raise SystemExit("Invalid characters in agent configuration")
+agent_env.write_text(
+    'HOMELAB_AGENT_TOKEN=' + token + '\n'
+    'HOMELAB_ALLOWED_CONTAINERS=' + values.get("HOMELAB_ALLOWED_CONTAINERS", "") + '\n'
+)
+agent_env.chmod(0o600)
+
+python = Path.home() / ".local/share/homelabos/venv/bin/python"
+agent = root / "agent/agent.py"
+unit_dir = Path.home() / ".config/systemd/user"
+unit_dir.mkdir(parents=True, exist_ok=True)
+unit = unit_dir / "homelabos-agent.service"
+unit.write_text(
+    "[Unit]\nDescription=HomeLab OS Fedora collector\nAfter=default.target\n\n"
+    "[Service]\nType=simple\n"
+    "EnvironmentFile=" + shlex.quote(str(agent_env)) + "\n"
+    "ExecStart=" + shlex.quote(str(python)) + " " + shlex.quote(str(agent)) + "\n"
+    "Restart=on-failure\nRestartSec=5\n"
+    "NoNewPrivileges=true\nProtectSystem=strict\nProtectHome=read-only\n"
+    "PrivateTmp=true\nRestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX\n"
+    "UMask=0077\n\n"
+    "[Install]\nWantedBy=default.target\n"
+)
+print("Agent unit installed at:", unit)
