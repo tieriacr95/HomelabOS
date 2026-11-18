@@ -85,8 +85,11 @@ def firewall_status():
                 "zones": [], "error": "firewall-cmd no disponible"}
     rc, output, _ = run("firewall-cmd", "--state", timeout=4)
     if rc != 0 or output.strip() != "running":
-        return {"available": True, "service": service, "state": "not-running",
-                "zones": [], "error": None}
+        state = ("not-running" if output.strip() == "not running" or
+                 service in ("inactive", "failed") else "unknown")
+        return {"available": True, "service": service, "state": state,
+                "zones": [], "error": None if state == "not-running" else
+                "No se pudo consultar el estado de firewalld"}
     rc, raw, _ = run("firewall-cmd", "--get-active-zones", timeout=5)
     if rc != 0:
         return {"available": True, "service": service, "state": "running",
@@ -94,7 +97,7 @@ def firewall_status():
     zones = []
     for line in raw.splitlines():
         if line and not line.startswith((" ", "\t")):
-            name = line.strip()
+            name = line.strip().split(" (", 1)[0]
             if not re.fullmatch(r"[a-zA-Z0-9_-]{1,64}", name):
                 continue
             zones.append({"name": name, "interfaces": [], "sources": [],
