@@ -91,6 +91,7 @@ def inventory(allowed=frozenset()):
             "status": str(row.get("Status") or "")[:180],
             "ports": str(row.get("Ports") or "")[:400],
             "allowed_actions": list(sorted(ACTIONS)) if name in allowed else [],
+            "critical_reason": critical_reason(name, str(row.get("Image") or "")),
         })
     labels = compose_labels([c["name"] for c in containers])
     groups = {}
@@ -178,3 +179,100 @@ def control(name, action, allowed=frozenset()):
     if rc:
         return {"ok": False, "error": error.strip()[:180] or "Docker action failed"}
     return {"ok": True, "container": name, "action": action}
+
+
+# Host-managed group operations: do not read or execute user-supplied compose files.
+# Existing containers only; no compose up/down, volume/image deletion or builds.
+VERBS = {"start": "INICIAR", "stop": "DETENER", "restart": "REINICIAR"}
+CRITICAL_TOKENS = ("postgres", "mariadb", "mysql", "mongo", "redis", "database",
+                   "cloudflared", "tunnel", "homelabos", "vaultwarden", "traefik")
+CRITICAL_COMPONENTS = frozenset(("db", "database", "database-1", "pg", "pgdata"))
+
+
+def critical_reason(name, image=""):
+    """Conservative server-side guard for services whose loss impacts other apps."""
+    lower = (name + " " + image).lower()
+    components = re.split(r"[-_.\s/]+", lower)
+    if any(token in lower for token in CRITICAL_TOKENS) or any(
+            component in CRITICAL_COMPONENTS for component in components):
+        return "Servicio crítico: base de datos, túnel, proxy o panel de administración"
+    return ""
+
+
+def project_order(containers, action):
+    """Approximate dependencies: databases before APIs, workers and web on start.
+
+    Reversed for stop. This is NOT a substitute for Docker Compose depends_on,
+    health checks or a full stack orchestration.
+    """
+    def priority(c):
+        parts = (c.get("service", "") + " " + c["name"]).lower()
+        if critical_reason(parts, c.get("image", "")) and any(
+                word in parts for word in ("db", "postgres", "mysql", "maria", "redis")):
+            return 0
+        if "api" in parts or "backend" in parts:
+            return 1
+        if "worker" in parts:
+            return 2
+        if "web" in parts or "frontend" in parts:
+            return 3
+        return 2
+    return sorted(containers, key=lambda c: (priority(c), c["name"]),
+                  reverse=action == "stop")
+
+
+def operation_plan(scope, name, action, allowed, snapshot=None):
+    if action not in ACTIONS or not valid_name(name) or scope not in ("container", "project"):
+        raise ValueError("Invalid Docker operation")
+    current = snapshot if snapshot is not None else inventory(allowed)
+    if not current["connected"]:
+        raise RuntimeError("Docker is unavailable")
+    containers = current["containers"]
+    if scope == "container":
+        selected = [c for c in containers if c["name"] == name]
+    else:
+        selected = [c for c in containers if c.get("project") == name]
+    if not selected:
+        raise LookupError("Container or project was not found")
+    if len(selected) > 30:
+        raise ValueError("Too many containers in project")
+    disallowed = [c["name"] for c in selected if c["name"] not in allowed]
+    if disallowed:
+        raise PermissionError("Not allowlisted: " + ", ".join(disallowed[:5]))
+    selected = project_order(selected, action) if scope == "project" else selected
+    critical = [c["name"] for c in selected if c.get("critical_reason") or
+                critical_reason(c["name"], c.get("image", ""))]
+    phrase = (f"{VERBS[action]} PROYECTO {name}" if scope == "project" else
+              f"{VERBS[action]} {name}" if critical else "")
+    return {
+        "scope": scope, "name": name, "action": action,
+        "containers": [c["name"] for c in selected],
+        "critical": critical, "requires_confirmation": bool(phrase),
+        "confirmation_phrase": phrase,
+        "warning": ("Las dependencias Compose no se orquestan; se operan contenedores "
+                    "existentes individualmente. Se detendrá al primer fallo."
+                    if scope == "project" else
+                    "Detener o reiniciar este servicio podría afectar otras aplicaciones."),
+    }
+
+
+def execute_plan(plan, allowed, confirmation_text=""):
+    # The caller must calculate the plan from a fresh inventory immediately
+    # before executing. Never trust a browser-supplied container list.
+    expected = plan["confirmation_phrase"]
+    if expected and confirmation_text != expected:
+        raise PermissionError("Typed confirmation is required")
+    done = []
+    for name in plan["containers"]:
+        if name not in allowed:
+            raise PermissionError("Container not on allowlist")
+        args = ["docker", plan["action"]]
+        if plan["action"] in ("stop", "restart"):
+            args += ["--time", "10"]
+        rc, _, err = command(*args, name, timeout=35, max_output=1000)
+        if rc:
+            return {"ok": False, "completed": done, "failed": name,
+                    "error": err.strip()[:180] or "Docker operation failed"}
+        done.append(name)
+    return {"ok": True, "completed": done, "scope": plan["scope"],
+            "name": plan["name"], "action": plan["action"]}

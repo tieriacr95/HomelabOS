@@ -12,6 +12,7 @@ ACTIONS = frozenset(("start", "stop", "restart"))
 
 class ConfirmAction(BaseModel):
     confirm: bool
+    confirmation_text: str = ""
 
 
 def require_name(name):
@@ -23,8 +24,10 @@ def require_name(name):
 def make_router(current_user, csrf_user, relay, store):
     router = APIRouter(prefix="/api/docker", tags=["docker"])
 
-    async def call(method, path, timeout=25):
+    async def call(method, path, timeout=25, body=None):
         try:
+            if body is not None:
+                return await relay(method, path, timeout=timeout, body=body)
             return await relay(method, path, timeout=timeout)
         except httpx.HTTPStatusError as exc:
             status = exc.response.status_code
@@ -52,6 +55,35 @@ def make_router(current_user, csrf_user, relay, store):
         encoded = require_name(name)
         return await call("GET",
                           f"/v1/docker/containers/{encoded}/logs?tail={tail}&since={since}")
+
+    @router.get("/plan/{scope}/{name}/{action}")
+    async def preview(scope: str, name: str, action: str, user=Depends(current_user)):
+        if scope not in ("container", "project") or action not in ACTIONS:
+            raise HTTPException(422, "Operación no permitida")
+        encoded = require_name(name)
+        return await call("GET", f"/v1/docker/plan/{scope}/{encoded}/{action}")
+
+    @router.post("/execute/{scope}/{name}/{action}")
+    async def execute(scope: str, name: str, action: str, body: ConfirmAction,
+                      user=Depends(csrf_user)):
+        if scope not in ("container", "project") or action not in ACTIONS:
+            raise HTTPException(422, "Operación no permitida")
+        encoded = require_name(name)
+        if not body.confirm:
+            raise HTTPException(400, "Debes confirmar la operación")
+        if len(body.confirmation_text) > 250:
+            raise HTTPException(422, "Confirmación demasiado larga")
+        try:
+            result = await call("POST",
+                                f"/v1/docker/execute/{scope}/{encoded}/{action}",
+                                timeout=180, body={"confirmation_text": body.confirmation_text})
+        except HTTPException as exc:
+            store.log(user["username"], action, f"{scope}:{name}",
+                      "denied" if exc.status_code == 403 else "failed")
+            raise
+        store.log(user["username"], action, f"{scope}:{name}",
+                  "ok" if result.get("ok") else "failed")
+        return result
 
     @router.post("/containers/{name}/{action}")
     async def control(name: str, action: str, body: ConfirmAction, user=Depends(csrf_user)):

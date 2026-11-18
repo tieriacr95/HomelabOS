@@ -152,6 +152,20 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(200, docker_manager.inventory(ALLOWED))
         if path.path == "/v1/docker/stats":
             return self.reply(200, docker_manager.stats())
+        preview = re.fullmatch(
+            r"/v1/docker/plan/(container|project)/([^/]+)/(start|stop|restart)", path.path)
+        if preview:
+            scope, name, action = preview.groups()
+            try:
+                plan = docker_manager.operation_plan(scope, unquote(name), action, ALLOWED)
+                return self.reply(200, plan)
+            except PermissionError:
+                return self.reply(403, {"error": "not_allowed"})
+            except (ValueError, LookupError):
+                return self.reply(422, {"error": "invalid_target"})
+            except RuntimeError:
+                return self.reply(503, {"error": "docker_unavailable"})
+
         match = re.fullmatch(r"/v1/docker/containers/([^/]+)/logs", path.path)
         if match:
             name = unquote(match.group(1))
@@ -168,9 +182,32 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if not self.authorized():
             return self.reply(401, {"error": "unauthorized"})
+        transaction = re.fullmatch(
+            r"/v1/docker/execute/(container|project)/([^/]+)/(start|stop|restart)", self.path)
+        if transaction:
+            try:
+                size = int(self.headers.get("Content-Length", "0"))
+                if size < 0 or size > 1024:
+                    return self.reply(413, {"error": "oversized_body"})
+                payload = json.loads(self.rfile.read(size) or b"{}")
+                confirmation = payload.get("confirmation_text", "")
+                if not isinstance(confirmation, str) or len(confirmation) > 250:
+                    return self.reply(422, {"error": "invalid_confirmation"})
+                scope, name, action = transaction.groups()
+                plan = docker_manager.operation_plan(scope, unquote(name), action, ALLOWED)
+                result = docker_manager.execute_plan(plan, ALLOWED, confirmation)
+                return self.reply(200 if result["ok"] else 502, result)
+            except PermissionError:
+                return self.reply(403, {"error": "not_allowed_or_unconfirmed"})
+            except (ValueError, LookupError, TypeError, AttributeError):
+                return self.reply(422, {"error": "invalid_target_or_payload"})
+            except RuntimeError:
+                return self.reply(503, {"error": "docker_unavailable"})
         operation = re.fullmatch(r"/v1/docker/containers/([^/]+)/(start|stop|restart)", self.path)
         if operation:
             name, action = unquote(operation.group(1)), operation.group(2)
+            if docker_manager.critical_reason(name):
+                return self.reply(403, {"error": "use_confirmed_endpoint"})
             try:
                 result = docker_manager.control(name, action, ALLOWED)
             except PermissionError:
@@ -180,8 +217,8 @@ class Handler(BaseHTTPRequestHandler):
         if not match:
             return self.reply(404, {"error": "not_found"})
         name = unquote(match.group(1))
-        if not can_restart(name):
-            return self.reply(403, {"error": "not_allowed"})
+        if not can_restart(name) or docker_manager.critical_reason(name):
+            return self.reply(403, {"error": "not_allowed_or_critical"})
         rc, out, err = run("docker", "restart", "--time", "10", name, timeout=20)
         if rc != 0:
             return self.reply(502, {"error": "restart_failed", "detail": err[:160]})

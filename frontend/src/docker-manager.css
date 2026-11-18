@@ -100,3 +100,14 @@
 .dm-log-metrics{display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:0 22px 12px}
 .dm-log-metrics>span{font-size:11px;color:#c2dfd4;background:#1b3030;border:1px solid #31504b;border-radius:7px;padding:8px 10px}
 .dm-log-metrics b{color:#75dabd;font-weight:750;margin-right:7px}
+
+.dm-project-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-bottom:1px solid #304049}
+.dm-affected{max-height:190px;overflow:auto;background:#0c171e;border:1px solid #30434b;border-radius:8px;padding:7px 13px}
+.dm-affected>div{display:flex;align-items:center;gap:8px;font-size:11px;padding:6px 0;color:#a8bec8;overflow-wrap:anywhere}
+.dm-affected b{font-size:9px;margin-left:auto;padding:4px;border-radius:4px;color:#ffbb9c;background:#4b3027}
+.dm-confirm-warning{display:flex;gap:9px;align-items:flex-start}
+.dm-confirm-warning svg{flex:0 0 auto;color:#ffb996}
+.dm-confirm-label{display:flex;flex-direction:column;gap:10px;font-size:11px;color:#a9c1c5;margin-top:14px}
+.dm-confirm-label strong{font-size:12px;color:#ffe0b1;overflow-wrap:anywhere}
+.dm-confirm-label input{width:100%;background:#0b171e;border:1px solid #577a77;border-radius:8px;padding:12px;color:#e8f7f7;font-size:12px}
+.dm-confirm{max-height:90vh;overflow-y:auto}

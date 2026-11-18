@@ -154,12 +154,12 @@ def logout(request: Request, response: Response, user=Depends(csrf_user)):
     return {"ok": True}
 
 
-async def agent_request(method: str, path: str, timeout: float = 9.0):
+async def agent_request(method: str, path: str, timeout: float = 9.0, body=None):
     if not AGENT_TOKEN:
         raise RuntimeError("El token del agente no está configurado")
     async with httpx.AsyncClient(timeout=httpx.Timeout(timeout, connect=2.0)) as client:
         response = await client.request(
-            method, AGENT + path, headers={"Authorization": "Bearer " + AGENT_TOKEN})
+            method, AGENT + path, headers={"Authorization": "Bearer " + AGENT_TOKEN}, json=body)
     response.raise_for_status()
     return response.json()
 

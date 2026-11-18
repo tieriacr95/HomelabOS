@@ -48,6 +48,8 @@ export default function DockerManager({ request, csrf }) {
   const [fetching, setFetching] = useState(false);
   const [loadingAction, setLoadingAction] = useState(false);
   const [action, setAction] = useState(null);
+  const [typedConfirmation, setTypedConfirmation] = useState('');
+  const [previewing, setPreviewing] = useState(false);
   const [showLogs, setShowLogs] = useState(null);
   const [logs, setLogs] = useState('');
   const [logsError, setLogsError] = useState('');
@@ -113,16 +115,26 @@ export default function DockerManager({ request, csrf }) {
   }), [containers, filter, query]);
   const matches = (text) => String(text || '').toLowerCase().includes(query.trim().toLowerCase());
 
+  async function beginAction(name, type, scope = 'container') {
+    setError(''); setPreviewing(true);
+    try {
+      const plan = await request('/api/docker/plan/' + scope + '/' + encodeURIComponent(name) + '/' + type);
+      setTypedConfirmation('');
+      setAction({ name, type, scope, plan });
+    } catch(e) { setError(e.message || 'Operación no autorizada'); }
+    finally { setPreviewing(false); }
+  }
   async function commitAction() {
     if (!action) return;
     setLoadingAction(true);
     setError('');
     try {
-      const name = action.name;
-      await request('/api/docker/containers/' + encodeURIComponent(name) + '/' + action.type,
-        { method: 'POST', body: JSON.stringify({ confirm: true }) }, csrf);
-      setToast('Operación ejecutada: ' + actionLabels[action.type] + ' · ' + name);
-      setAction(null);
+      const {name, type, scope, plan} = action;
+      const result = await request('/api/docker/execute/' + scope + '/' + encodeURIComponent(name) + '/' + type,
+        { method: 'POST', body: JSON.stringify({ confirm: true, confirmation_text: typedConfirmation }) }, csrf);
+      if (!result.ok) throw Error(result.error || 'Una parte de la operación falló');
+      setToast(actionLabels[type] + ' · ' + name + ' · ' + result.completed.length + ' contenedor(es)');
+      setAction(null); setTypedConfirmation('');
       await Promise.all([refresh(true), refreshStats()]);
     } catch(e) { setError(e.message || 'Falló la operación'); setAction(null); }
     finally { setLoadingAction(false); }
@@ -185,7 +197,7 @@ export default function DockerManager({ request, csrf }) {
             {c.service && <span className="dm-muted dm-image">{c.service}</span>}</td>
           <td><div className="dm-inline-ops">
             <button className="dm-log-button" onClick={() => viewLogs(c.name)} title="Ver logs"><FileText size={14}/> Logs</button>
-            <ActionButtons container={c} onAction={(name,type)=>setAction({name,type})}/>
+            <ActionButtons container={c} onAction={beginAction}/>
           </div></td>
         </tr>)} />}
       {inventory?.connected && section === 'projects' && (projects.filter(p=>matches(p.name) || p.containers.some(matches)).length ?
@@ -194,6 +206,14 @@ export default function DockerManager({ request, csrf }) {
             <div className="dm-project-title"><div className="dm-project-icon"><Layers size={20}/></div>
               <div><strong>{p.name}</strong><small>{p.services.length} servicios · {p.total} contenedores</small></div>
               <State good={p.running===p.total}>{p.running}/{p.total} activos</State>
+            </div>
+            <div className="dm-project-actions">
+              <span className="dm-muted">{p.containers.every(n => containers.find(c => c.name === n)?.allowed_actions?.length) ? 'Proyecto autorizado' : 'Algunos contenedores son de solo lectura'}</span>
+              <div className="dm-actions">
+                <button aria-label={'Iniciar proyecto '+p.name} title="Iniciar contenedores existentes" disabled={previewing || !p.containers.every(n=>containers.find(c=>c.name===n)?.allowed_actions?.length)} onClick={()=>beginAction(p.name, 'start', 'project')}><Play size={15}/></button>
+                <button aria-label={'Detener proyecto '+p.name} title="Detener proyecto" disabled={previewing || !p.containers.every(n=>containers.find(c=>c.name===n)?.allowed_actions?.length)} onClick={()=>beginAction(p.name, 'stop', 'project')}><Square size={15}/></button>
+                <button aria-label={'Reiniciar proyecto '+p.name} title="Reiniciar proyecto" disabled={previewing || !p.containers.every(n=>containers.find(c=>c.name===n)?.allowed_actions?.length)} onClick={()=>beginAction(p.name, 'restart', 'project')}><RotateCw size={15}/></button>
+              </div>
             </div>
             <div className="dm-project-children">{p.containers.map(name => {
               const c=containers.find(x=>x.name===name);
@@ -245,12 +265,25 @@ export default function DockerManager({ request, csrf }) {
     {action && <div className="dm-overlay" onMouseDown={e=>e.target===e.currentTarget&&setAction(null)}>
       <div className="dm-confirm" role="dialog" aria-modal="true" aria-label="Confirmar operación Docker">
         <div className="dm-warning"><AlertTriangle size={24}/></div>
-        <h3>¿{actionLabels[action.type]} contenedor?</h3>
-        <p>Se ejecutará <strong>{action.type}</strong> sobre <strong>{action.name}</strong> en tu Fedora.
-          {action.type==='stop' && ' Esto interrumpirá el servicio y su política de reinicio podría volver a iniciarlo.'}
-          {action.type==='restart' && ' El servicio quedará temporalmente interrumpido.'}</p>
-        <div className="dm-confirm-actions"><button className="dm-button dm-outline" onClick={()=>setAction(null)} disabled={loadingAction}>Cancelar</button>
-          <button className="dm-button dm-danger-button" onClick={commitAction} disabled={loadingAction}>{loadingAction?'Aplicando…':'Confirmar '+actionLabels[action.type].toLowerCase()}</button></div>
+        <h3>{actionLabels[action.type]} {action.scope === 'project' ? 'proyecto Compose' : 'contenedor'}: {action.name}</h3>
+        <p><strong>Se ejecutará {action.type}</strong> sobre {action.plan.containers.length} contenedor(es) existentes.</p>
+        <div className="dm-affected">
+          {action.plan.containers.map(name=><div key={name}><Container size={13}/>{name}
+            {action.plan.critical.includes(name) && <b>CRÍTICO</b>}</div>)}
+        </div>
+        <p className="dm-confirm-warning"><AlertTriangle size={15}/>{action.plan.warning}</p>
+        {action.plan.requires_confirmation && <label className="dm-confirm-label">
+          Para continuar escribe exactamente <strong>{action.plan.confirmation_phrase}</strong>
+          <input autoComplete="off" value={typedConfirmation} onChange={e=>setTypedConfirmation(e.target.value)}
+             placeholder={action.plan.confirmation_phrase}/>
+        </label>}
+        <div className="dm-confirm-actions">
+          <button className="dm-button dm-outline" onClick={()=>setAction(null)} disabled={loadingAction}>Cancelar</button>
+          <button className="dm-button dm-danger-button" onClick={commitAction}
+            disabled={loadingAction || (action.plan.requires_confirmation && typedConfirmation !== action.plan.confirmation_phrase)}>
+            {loadingAction?'Aplicando…':'Confirmar '+actionLabels[action.type].toLowerCase()}
+          </button>
+        </div>
       </div>
     </div>}
   </div>;
