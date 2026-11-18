@@ -147,3 +147,54 @@ def test_firewall_query_failure_not_reported_as_inactive(monkeypatch):
     value=sc.firewall_status()
     assert value["state"]=="unknown"
     assert value["error"] is not None
+
+
+def test_inactive_ssh_is_not_applicable(monkeypatch):
+    monkeypatch.setattr(sc, "_service_active", lambda name: "inactive")
+    monkeypatch.setattr(sc.shutil, "which", lambda binary: None)
+    monkeypatch.setattr(sc, "Path", lambda path: type("PathStub", (), {"exists": lambda self: False})())
+    value=sc.ssh_status()
+    assert value["available"] is False
+    assert value["not_applicable"] is True
+    assert "desactivado" in value["error"]
+
+
+def test_ssh_missing_binary_and_no_active_service_is_not_applicable(monkeypatch):
+    monkeypatch.setattr(sc, "_service_active", lambda name: "unknown")
+    monkeypatch.setattr(sc.shutil, "which", lambda binary: None)
+    monkeypatch.setattr(sc, "Path", lambda path: type("PathStub", (), {"exists": lambda self: False})())
+    value=sc.ssh_status()
+    assert value["not_applicable"] is True
+
+
+def test_system_journal_access_hint_does_not_report_zero_failures(monkeypatch):
+    monkeypatch.setattr(sc.shutil, "which", lambda binary: "/usr/bin/journalctl")
+    def fake(*args, **kwargs):
+        assert "--system" in args
+        assert "-q" not in args
+        return 0, "", "Hint: You are currently not seeing messages from other users and the system."
+    monkeypatch.setattr(sc, "run", fake)
+    value=sc.auth_events()
+    assert value["available"] is False
+    assert value["ssh_failed"] is None
+    assert "journal" in value["error"]
+
+
+def test_coverage_names_exact_missing_checks():
+    sample={
+        "selinux": {"available": True, "mode": "enforcing"},
+        "firewall": {"state": "running", "error": None},
+        "ssh": {"available": False, "not_applicable": True,
+                "error": "SSH desactivado", "service": "inactive"},
+        "ports": {"available": True, "total": 8, "error": None},
+        "authentication": {"available": False, "error": "Journal inaccesible",
+                           "scanned_lines": 0},
+    }
+    result=sc.check_coverage(sample)
+    assert len(result)==5
+    states={check["id"]:check["status"] for check in result}
+    assert states["ssh"]=="not_applicable"
+    assert states["authentication"]=="unavailable"
+    assert states["ports"]=="verified"
+    assert not any(check["status"]=="unavailable" for check in result if check["id"]=="ssh")
+    assert all(check["reason"] and check["advice"] for check in result)

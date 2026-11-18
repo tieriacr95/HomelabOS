@@ -20,6 +20,31 @@ El sistema genera hallazgos orientativos y ordenados por severidad: crítica, al
 
 **Sin falsos positivos por ausencia de acceso:** si journalctl, sshd -T o la enumeración de sockets no es accesible, la prueba figura como **no disponible**, nunca como cero incidentes. El indicador de cobertura cuenta cuántas de las cinco familias principales han podido verificarse.
 
+## Diagnóstico individual de comprobaciones (v0.4.1)
+
+La sección **Seguridad → Hallazgos → Estado de las comprobaciones** muestra ahora, para cada fuente, uno de estos estados:
+
+- **Comprobado:** pudo obtener datos de esa fuente.
+- **Revisar configuración:** el control funcionó pero detectó un estado que merece atención.
+- **No aplica:** SSH está desactivado o no está instalado; no se considera un fallo de seguridad ni necesitas activarlo.
+- **No disponible:** los permisos u otra condición impidieron comprobarlo. El panel muestra la causa y cómo verificarla en la terminal.
+
+En Fedora Workstation, `sshd` puede no estar habilitado: es habitual y no requiere instalarlo. Ejecutar `sshd -T` como usuario normal puede fallar por acceso a archivos del servidor SSH; el agente nunca utiliza sudo para esta comprobación. La terminal local permite verificar la configuración bajo supervisión del propietario.
+
+Para eventos de autenticación se utiliza exclusivamente el journal del sistema (consultado sin root). Cuando journalctl indica que no se tiene acceso, el resultado queda **no disponible** en vez de reportar falsamente cero fallos. No concedas al agente acceso amplio a los registros solo para aumentar el indicador de cobertura.
+
+Si falta una fuente, puedes contrastarla manualmente:
+
+~~~bash
+systemctl is-active sshd sshd.socket firewalld
+command -v sshd
+journalctl --system -n 3 --no-pager
+ss -ltnup
+getenforce
+~~~
+
+Los comandos anteriores consultan el estado; no activan servicios ni modifican permisos. La ausencia de SSH activo no es necesariamente un problema de seguridad.
+
 ## Instalación y actualización
 
 ~~~bash

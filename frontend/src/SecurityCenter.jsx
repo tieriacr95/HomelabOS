@@ -86,10 +86,15 @@ export default function SecurityCenter({ request }) {
     } catch (_) { setMessage('No fue posible copiar el informe desde este navegador.'); }
   }
   const summary = report?.summary;
+  const checks = report?.checks || [];
+  const missingChecks = checks.filter(c => c.status === 'unavailable');
+  const skippedChecks = checks.filter(c => c.status === 'not_applicable');
+  const statusName = {verified:'Comprobado',review:'Revisar configuración',
+                      unavailable:'No disponible',not_applicable:'No aplica'};
 
   return <div className="sc-root">
     <div className="sc-heading">
-      <div><div className="eyebrow">FEDORA · SECURITY CENTER v0.4</div>
+      <div><div className="eyebrow">FEDORA · SECURITY CENTER v0.4.1</div>
         <h2>Seguridad del sistema</h2>
         <p>Auditoría de configuración y superficie de exposición, sin cambios automáticos.</p>
       </div>
@@ -109,7 +114,7 @@ export default function SecurityCenter({ request }) {
       <Stat label="Sockets fuera de loopback" value={summary?.visible_ports??'—'}
         note="No implica exposición pública" icon={Radio}/>
       <Stat label="Comprobaciones evaluadas" value={summary?summary.checks_available+'/'+summary.checks_total:'—'}
-        note="Las no disponibles no se consideran seguras" icon={ShieldCheck}/>
+        note={summary?(summary.checks_not_applicable||0)+' no aplican · '+(summary.checks_missing??'—')+' pendientes':'Cargando diagnóstico'} icon={ShieldCheck}/>
     </div>
     <div className="sc-context">
       <span><Server size={15}/>{report?.hostname || 'Equipo Fedora'}</span>
@@ -133,6 +138,30 @@ export default function SecurityCenter({ request }) {
             {Object.entries(levels).map(([key,v])=><option value={key} key={key}>{v.label}</option>)}
           </select>
         </div>
+        <div className="sc-coverage">
+          <div className="sc-coverage-heading">
+            <div><h3>Estado de las comprobaciones</h3>
+              <p>Identifica las fuentes que necesitan atención. No debes instalar SSH ni elevar permisos solo para completar una prueba.</p>
+            </div>
+            {missingChecks.length>0 && <Tag status="medium">{missingChecks.length} sin verificar</Tag>}
+          </div>
+          {checks.length ? <div className="sc-check-list">
+            {[...missingChecks,...skippedChecks,...checks.filter(c=>c.status!=='unavailable'&&c.status!=='not_applicable')]
+              .map(check=><article className={'sc-check sc-check-'+check.status} key={check.id}>
+                <div className="sc-check-title">
+                  {check.status==='verified'?<CheckCircle2 size={17}/>:<ShieldQuestion size={17}/>}
+                  <strong>{check.label}</strong>
+                  <Tag status={check.status==='verified'?'good':check.status==='unavailable'?'medium':'info'}>
+                    {statusName[check.status]||check.status}</Tag>
+                </div>
+                <p>{check.reason}</p>
+                {(check.status==='unavailable'||check.status==='not_applicable')&&
+                  <div className="sc-check-advice">{check.advice}</div>}
+              </article>)}
+          </div>:<div className="sc-unavailable"><ShieldQuestion size={18}/>
+            El agente aún no incluye el diagnóstico individual de las fuentes. Actualízalo con bash scripts/install.sh y vuelve a analizar.
+          </div>}
+        </div>
         {visibleFindings.length ? <div className="sc-findings">{visibleFindings.map(item=>
           <article className={'sc-finding sc-finding-'+item.severity} key={item.id}>
             <div className="sc-finding-top"><Severity level={item.severity}/><strong>{item.title}</strong></div>
@@ -140,8 +169,8 @@ export default function SecurityCenter({ request }) {
             <div className="sc-recommendation"><ShieldCheck size={16}/><span>{item.recommendation}</span></div>
           </article>)}</div> : <NoData>{findings.length?'No hay hallazgos para este filtro.':
             'Sin hallazgos en las comprobaciones disponibles. Esto no garantiza que el equipo sea seguro.'}</NoData>}
-        {summary?.checks_available<summary?.checks_total && <div className="sc-unavailable">
-          <ShieldQuestion size={18}/> Algunas comprobaciones no pudieron completarse. Revisa SSH, permisos del journal y acceso a sockets antes de interpretar el resultado.
+        {missingChecks.length > 0 && <div className="sc-unavailable">
+          <ShieldQuestion size={18}/> Hay {missingChecks.length} comprobación(es) sin verificar. Las causas y las verificaciones recomendadas aparecen arriba; no se consideran resultados seguros.
         </div>}
       </div>}
       {report && tab==='ports' && <div className="sc-content">

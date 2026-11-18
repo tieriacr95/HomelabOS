@@ -100,7 +100,7 @@ def establish_session(response: Response, username: str):
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "version": "0.4.0"}
+    return {"status": "ok", "version": "0.4.1"}
 
 
 @app.get("/api/auth/status")

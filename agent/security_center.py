@@ -118,21 +118,32 @@ def firewall_status():
 def ssh_status():
     service = _service_active("sshd")
     binary = shutil.which("sshd") or ("/usr/sbin/sshd" if Path("/usr/sbin/sshd").exists() else None)
+    socket_service = _service_active("sshd.socket")
+    if service in ("inactive", "failed") and socket_service != "active":
+        return {"service": service, "socket_service": socket_service,
+                "available": False, "not_applicable": True, "effective": {},
+                "error": "El servidor SSH está desactivado; no es necesario activar SSH para ejecutar esta comprobación"}
     if not binary:
-        return {"service": service, "available": False, "effective": {},
-                "error": "sshd no disponible"}
+        inactive = service != "active" and socket_service != "active"
+        return {"service": service, "socket_service": socket_service,
+                "available": False, "not_applicable": inactive, "effective": {},
+                "error": ("El servidor OpenSSH no está instalado ni activo; no necesitas instalarlo"
+                          if inactive else
+                          "El servicio SSH parece estar activo, pero no se encontró el ejecutable sshd")}
     # -T tests a sample connection. Match blocks for other clients may differ.
     rc, raw, _ = run(binary, "-T", "-C", "user=root,host=localhost,addr=127.0.0.1",
                      timeout=6, max_bytes=50_000)
     if rc:
-        return {"service": service, "available": False, "effective": {},
-                "error": "No se pudo leer la configuración efectiva de sshd"}
+        return {"service": service, "socket_service": socket_service,
+                "available": False, "not_applicable": False, "effective": {},
+                "error": "sshd -T falló; puede requerir leer claves o archivos protegidos. Verifica la salida en una terminal, sin elevar el agente"}
     config = {}
     for line in raw.splitlines():
         key, _, value = line.partition(" ")
         if key in SSH_KEYS:
             config[key] = value.strip().lower()[:80]
-    return {"service": service, "available": bool(config), "effective": config,
+    return {"service": service, "socket_service": socket_service,
+            "available": bool(config), "not_applicable": False, "effective": config,
             "sample": "root@localhost (Match puede variar por origen)",
             "error": None if config else "Configuración de SSH incompleta"}
 
@@ -189,13 +200,16 @@ def auth_events():
         return {"available": False, "error": "journalctl no disponible",
                 "period_hours": 24, "ssh_failed": None, "ssh_accepted": None,
                 "sudo_failures": None, "scanned_lines": 0}
-    rc, raw, _ = run("journalctl", "--since=-24h", "--no-pager", "-q",
-                     "-o", "cat", "-n", "2500",
-                     "-t", "sshd", "-t", "sshd-session", "-t", "sudo",
-                     timeout=8, max_bytes=240_000)
-    if rc != 0:
+    rc, raw, stderr = run("journalctl", "--system", "--since=-24h",
+                          "--no-pager", "-o", "cat", "-n", "2500",
+                          "-t", "sshd", "-t", "sshd-session", "-t", "sudo",
+                          timeout=8, max_bytes=240_000)
+    denied_hint = ("not seeing messages from other users" in stderr.lower() or
+                   "insufficient permissions" in stderr.lower() or
+                   "permission denied" in stderr.lower())
+    if rc != 0 or denied_hint:
         return {"available": False,
-                "error": "El journal del sistema no es accesible para este usuario",
+                "error": "El journal del sistema no es accesible o está limitado para este usuario",
                 "period_hours": 24, "ssh_failed": None,
                 "ssh_accepted": None, "sudo_failures": None, "scanned_lines": 0}
     ssh_failed = ssh_accepted = sudo_failures = 0
@@ -297,6 +311,45 @@ def analyze(report):
     return sorted(findings, key=lambda item: (order[item["severity"]], item["id"]))
 
 
+def check_coverage(report):
+    """Per-source diagnostics without exposing raw system logs or private data."""
+    def item(identifier, label, status, reason, advice):
+        return {"id": identifier, "label": label, "status": status,
+                "reason": reason, "advice": advice}
+
+    selinux = report["selinux"]
+    fw = report["firewall"]
+    ssh = report["ssh"]
+    sockets = report["ports"]
+    auth = report["authentication"]
+    results = [
+        item("selinux", "SELinux",
+             "verified" if selinux["available"] else "unavailable",
+             "Modo " + selinux["mode"] if selinux["available"] else
+             "No se pudo determinar el modo actual",
+             "Comprueba getenforce y la existencia de /sys/fs/selinux/enforce. No desactives SELinux."),
+        item("firewall", "Firewall (firewalld)",
+             ("review" if fw["state"] == "not-running" else "verified")
+             if fw["state"] != "unknown" else "unavailable",
+             fw.get("error") or ("Estado: " + fw["state"]),
+             "Ejecuta systemctl is-active firewalld y firewall-cmd --state. Si usas nftables sin firewalld, revisa sus reglas; no actives otro firewall a ciegas."),
+        item("ssh", "Servidor SSH",
+             "not_applicable" if ssh.get("not_applicable") else
+             ("verified" if ssh["available"] else "unavailable"),
+             ssh.get("error") or ("Configuración efectiva accesible; sshd " + ssh["service"]),
+             "Si SSH no está activado, no necesitas instalarlo. Si sshd está activo, consulta sudo sshd -T -C user=root,host=localhost,addr=127.0.0.1 localmente. No concedas sudo general al agente."),
+        item("ports", "Sockets de red",
+             "verified" if sockets["available"] else "unavailable",
+             sockets.get("error") or f"{sockets['total']} sockets detectados; algunos procesos pueden no identificarse",
+             "Verifica sudo ss -ltnup solo en tu terminal. La falta de nombres de procesos no implica que el puerto esté abierto a Internet."),
+        item("authentication", "Eventos de autenticación",
+             "verified" if auth["available"] else "unavailable",
+             auth.get("error") or f"{auth['scanned_lines']} líneas visibles del journal analizadas",
+             "Prueba journalctl --system --since=-24h -t sshd --no-pager. El acceso al journal del sistema puede requerir permisos adicionales; no los habilites sin evaluar la necesidad.")
+    ]
+    return results
+
+
 def report():
     """Collect a bounded security snapshot. Partial data remains explicit."""
     data = {
@@ -313,17 +366,20 @@ def report():
         "read_only": True,
     }
     data["findings"] = analyze(data)
+    data["checks"] = check_coverage(data)
+    evaluated = sum(c["status"] in ("verified", "review") for c in data["checks"])
+    missing = sum(c["status"] == "unavailable" for c in data["checks"])
+    skipped = sum(c["status"] == "not_applicable" for c in data["checks"])
     data["summary"] = {
         "critical": sum(x["severity"] == "critical" for x in data["findings"]),
         "high": sum(x["severity"] == "high" for x in data["findings"]),
         "medium": sum(x["severity"] == "medium" for x in data["findings"]),
         "info": sum(x["severity"] == "info" for x in data["findings"]),
         "visible_ports": data["ports"]["non_loopback"],
-        "checks_available": sum([
-            data["selinux"]["available"], data["firewall"]["state"] != "unknown",
-            data["ssh"]["available"], data["ports"]["available"],
-            data["authentication"]["available"]]),
-        "checks_total": 5,
+        "checks_available": evaluated,
+        "checks_missing": missing,
+        "checks_not_applicable": skipped,
+        "checks_total": len(data["checks"]),
     }
     return data
 
