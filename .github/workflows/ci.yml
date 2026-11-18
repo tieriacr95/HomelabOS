@@ -21,6 +21,10 @@ jobs:
         run: pytest -q
       - name: Python syntax
         run: python -m compileall -q backend agent scripts
+      - name: Validate privileged helper and shell installers
+        run: |
+          python -m py_compile helpers/package-helper
+          bash -n scripts/install.sh scripts/install_package_helper.sh scripts/backup.sh
 
   frontend-build:
     runs-on: ubuntu-latest
