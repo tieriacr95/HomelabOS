@@ -34,6 +34,13 @@ jobs:
           node-version: '22'
       - run: npm install --no-audit --no-fund
       - run: npm run build
+      - name: Verify production output
+        run: |
+          test -s dist/index.html
+          test -s dist/assets/app.js
+          test -s dist/assets/app.css
+          grep -q '/assets/app.js' dist/index.html
+          grep -q '/assets/app.css' dist/index.html
 
   docker-build:
     runs-on: ubuntu-latest
