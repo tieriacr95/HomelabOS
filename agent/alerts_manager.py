@@ -340,7 +340,7 @@ def record_results(checks, config, now=None, sender=None):
                 target_event = "open"
             elif new["state"] == "resolved" and new["pending_recovery"]:
                 target_event = "recovery"
-            if not target_event:
+            if not target_event or emitted >= 5:
                 continue
             label = "🔴 Alerta" if target_event == "open" else "✅ Recuperado"
             msg = f"{label} HomeLab OS\n{new['title']}\nOrigen: {new['subject']}\nID: {new['id']}"

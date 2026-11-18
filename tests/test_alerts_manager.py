@@ -148,3 +148,25 @@ def test_private_telegram_rejects_bad_credentials(configured):
     am._write_private(am.TELEGRAM,{"bot_token":"bad-token","chat_id":"1234"})
     assert am.telegram_status()["configured"] is False
     assert "bad-token" not in str(am.telegram_status())
+
+
+def test_backup_verification_failures_create_monitor_signal(configured,monkeypatch):
+    config=am.rules()
+    records=[
+        {"operation":"verify","state":"failed","finished":10002},
+        {"operation":"backup","state":"success","finished":10000},
+    ]
+    monkeypatch.setattr(am.backup_manager,"status",lambda:{"configured":True,"jobs":records})
+    monkeypatch.setattr(am.time,"time",lambda:11000)
+    signals=am._backup_checks(config)
+    assert any(x["key"]=="backup:verification" and x["status"]=="fail" for x in signals)
+    assert any(x["key"]=="backup:freshness" and x["status"]=="ok" for x in signals)
+
+
+def test_maintenance_timer_status_exposed_only_as_boolean(configured,monkeypatch):
+    monkeypatch.setattr(am,"_timer_active",
+        lambda name="homelabos-alerts.timer":name=="homelabos-maintenance.timer")
+    result=am.summary()
+    assert result["timer"] is False
+    assert result["maintenance_timer"] is True
+    assert "bot_token" not in str(result)

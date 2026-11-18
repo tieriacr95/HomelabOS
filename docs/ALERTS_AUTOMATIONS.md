@@ -91,6 +91,23 @@ Se usa el historial local de operaciones de la fase D. Si los backups no están 
 
 Estas alarmas detectan fallos operativos y antigüedad; **no sustituyen la validación de recuperación**. Continúa haciendo simulacros de restauración y guardando una réplica cifrada fuera del equipo.
 
+## Mantenimiento semanal autorizado (opt-in)
+
+Además del sondeo de alertas, puedes configurar una **verificación semanal de integridad restic** sin ejecutar cambios sobre contenedores ni bases de producción. La configuración requiere que el repositorio cifrado de la Fase D ya exista.
+
+~~~bash
+python3 scripts/maintenance_schedule.py --enable
+systemctl --user list-timers homelabos-maintenance.timer
+~~~
+
+El timer verifica el repositorio cada domingo a las 04:00 (hora local), con un retraso aleatorio de hasta 15 minutos. Internamente registra el mismo trabajo de verificación profunda que ofrece el panel Respaldos. Si falla, HomeLab OS registra el resultado y la regla de respaldos genera una incidencia después de las comprobaciones consecutivas configuradas.
+
+~~~bash
+python3 scripts/maintenance_schedule.py --disable
+~~~
+
+Esta programación está desactivada por defecto y **no** actualiza DNF, elimina snapshots, reinicia contenedores ni modifica archivos de producción. Desactivar el timer preserva el historial.
+
 ## Diagnósticos y limitaciones
 
 ~~~bash

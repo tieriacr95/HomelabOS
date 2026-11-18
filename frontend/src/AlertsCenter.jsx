@@ -269,6 +269,16 @@ export default function AlertsCenter({request,csrf}){
         </Status>
       </div>
       <div className="al-channel">
+        <h4><ShieldCheck size={17}/> Mantenimiento autorizado · integridad restic</h4>
+        <p>Verificación opcional y de solo lectura del repositorio cifrado, cada domingo a las 04:00. Se registra como trabajo de Backup & Recovery, y sus fallos pueden generar incidentes.</p>
+        <pre>python3 scripts/maintenance_schedule.py --enable</pre>
+        <p>Desactivar sin borrar snapshots:</p>
+        <pre>python3 scripts/maintenance_schedule.py --disable</pre>
+        <Status type={snapshot?.maintenance_timer?'good':'warning'}>
+          {snapshot?.maintenance_timer?'Mantenimiento semanal habilitado':'Mantenimiento semanal desactivado'}
+        </Status>
+      </div>
+      <div className="al-channel">
         <h4><PauseCircle size={17}/> Silenciamiento global</h4>
         <p>Suspende los avisos sin detener el monitoreo, conservará el historial y las incidencias.</p>
         <div className="al-mute-controls">

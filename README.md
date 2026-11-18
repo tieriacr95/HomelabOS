@@ -14,7 +14,7 @@ Aplicación web oscura y responsive, accesible en **http://localhost:8091**. Tu 
 - **Servicios**: comprobaciones HTTP de endpoints que tú configures y alertas de disponibilidad.
 - **Security Center v0.4**: SELinux, firewalld, configuración efectiva SSH, sockets TCP/UDP, eventos de autenticación agregados, parámetros del kernel, hallazgos e historial; sin cambios automáticos. Sesiones HttpOnly, CSRF y auditoría.
 - **Histórico**: SQLite persistente, muestras de rendimiento y registro de acciones.
-- **Alertas y automatizaciones v0.6**: incidentes persistentes, reglas y umbrales, supervisión de Fedora/Docker/PostgreSQL/HTTP/TLS/restic, Telegram opt-in, silenciamiento, recuperación y timer systemd cada dos minutos.
+- **Alertas y automatizaciones v0.6**: incidentes persistentes, reglas y umbrales, supervisión de Fedora/Docker/PostgreSQL/HTTP/TLS/restic, Telegram opt-in, silenciamiento, recuperación y timer systemd cada dos minutos y verificación opcional semanal del repositorio cifrado.
 - **Backup & Recovery v0.5**: SQLite consistente, dumps de PostgreSQL, volúmenes y directorios Docker seleccionados, restic cifrado, programación diaria, retención, verificación profunda y restauración en staging seguro. Sin backups automáticos antes de DNF.
 
 ## Instalación en Fedora
