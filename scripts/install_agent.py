@@ -58,10 +58,10 @@ unit.write_text(
     "EnvironmentFile=" + shlex.quote(str(agent_env)) + "\n"
     "ExecStart=" + shlex.quote(str(python)) + " " + shlex.quote(str(agent)) + "\n"
     "Restart=on-failure\nRestartSec=5\n"
-    ("NoNewPrivileges=false\n" if privileged_mode else
+    + ("NoNewPrivileges=false\n" if privileged_mode else
      "NoNewPrivileges=true\nProtectSystem=strict\nProtectHome=read-only\n"
      "ReadWritePaths=-%h/.local/share/flatpak -%h/.cache\n")
-    "PrivateTmp=true\nRestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX\n"
+    + "PrivateTmp=true\nRestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX\n"
     "UMask=0077\n\n"
     "[Install]\nWantedBy=default.target\n"
 )
