@@ -142,3 +142,7 @@ Pendiente para futuras versiones: tareas automáticas, análisis avanzado de seg
 ## Backup & Recovery v0.5
 
 El panel Respaldos permite crear y verificar snapshots cifrados con restic, consultar el inventario de recursos y preparar recuperaciones aisladas. No se habilitan trabajos automáticos durante la instalación. Sigue [Backup & Recovery](BACKUP_RECOVERY.md) para crear un repositorio privado con contraseña local y elegir recursos. [Recovery](RECOVERY.md) explica cómo probar y realizar una recuperación controlada.
+
+## Alertas y automatizaciones v0.6
+
+La sección **Alertas** implementa incidentes persistentes, reglas de monitoreo, avisos por Telegram y evaluaciones programadas. La funcionalidad está desactivada hasta que el propietario configure el bot, active el timer y habilite las reglas. Consulta [Alertas y automatizaciones](ALERTS_AUTOMATIONS.md).

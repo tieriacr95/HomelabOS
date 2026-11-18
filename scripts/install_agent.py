@@ -54,7 +54,10 @@ print("Package helper: " + ("enabled (reduced agent sandbox)" if privileged_mode
 backup_state = Path.home() / ".local/state/homelabos/backup"
 backup_state.mkdir(parents=True, exist_ok=True)
 backup_state.chmod(0o700)
-backup_writes = [backup_state]
+alerts_state = Path.home() / ".local/state/homelabos/alerts"
+alerts_state.mkdir(parents=True, exist_ok=True)
+alerts_state.chmod(0o700)
+backup_writes = [backup_state, alerts_state, config]
 backup_env = Path.home() / ".config/homelabos/backup.env"
 if backup_env.is_file() and backup_env.stat().st_uid == os.getuid() and (
         backup_env.stat().st_mode & 0o077) == 0:

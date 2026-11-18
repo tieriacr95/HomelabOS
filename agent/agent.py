@@ -15,13 +15,14 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import unquote, urlsplit, parse_qs
 
 if __package__:
-    from . import docker_manager, package_manager, security_center, enhancements, backup_manager
+    from . import docker_manager, package_manager, security_center, enhancements, backup_manager, alerts_manager
 else:
     import docker_manager
     import package_manager
     import security_center
     import enhancements
     import backup_manager
+    import alerts_manager
 
 import psutil
 
@@ -153,6 +154,10 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 return self.reply(500, {"error": "collector_error"})
         path = urlsplit(self.path)
+        if path.path == "/v1/alerts/status":
+            return self.reply(200, alerts_manager.summary())
+        if path.path == "/v1/alerts/rules":
+            return self.reply(200, alerts_manager.rules())
         if path.path == "/v1/backup/status":
             return self.reply(200, backup_manager.status())
         if path.path == "/v1/backup/jobs":
@@ -223,6 +228,43 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if not self.authorized():
             return self.reply(401, {"error": "unauthorized"})
+        if self.path in ("/v1/alerts/rules", "/v1/alerts/check",
+                         "/v1/alerts/telegram/test") or re.fullmatch(
+                         r"/v1/alerts/incidents/[0-9]+/(acknowledge|silence|unsilence)",
+                         self.path):
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if length < 0 or length > 8000:
+                    return self.reply(413, {"error": "oversized_body"})
+                payload = json.loads(self.rfile.read(length) or b"{}")
+                if not isinstance(payload, dict):
+                    return self.reply(422, {"error": "invalid_request"})
+                if self.path == "/v1/alerts/rules":
+                    if set(payload) != {"rules"}:
+                        raise ValueError("Unexpected payload")
+                    return self.reply(200, alerts_manager.set_rules(payload["rules"]))
+                if self.path == "/v1/alerts/check":
+                    if payload != {"confirm": True}:
+                        return self.reply(403, {"error": "confirmation_required"})
+                    return self.reply(200, alerts_manager.poll())
+                if self.path == "/v1/alerts/telegram/test":
+                    if payload != {"confirm": True}:
+                        return self.reply(403, {"error": "confirmation_required"})
+                    return self.reply(200, alerts_manager.test_telegram())
+                match = re.fullmatch(
+                    r"/v1/alerts/incidents/([0-9]+)/(acknowledge|silence|unsilence)",
+                    self.path)
+                if match:
+                    if "minutes" not in payload or len(payload) != 1:
+                        raise ValueError("Invalid incident action")
+                    return self.reply(200, alerts_manager.incident_action(
+                        int(match.group(1)), match.group(2), payload["minutes"]))
+            except (TypeError, ValueError, AttributeError):
+                return self.reply(422, {"error": "invalid_parameters"})
+            except LookupError:
+                return self.reply(404, {"error": "incident_not_found"})
+            except alerts_manager.AlertError:
+                return self.reply(409, {"error": "alerts_unavailable_or_busy"})
         backup = re.fullmatch(r"/v1/backup/(backup|verify|restore)", self.path)
         if backup:
             try:

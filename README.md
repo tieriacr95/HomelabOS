@@ -14,6 +14,7 @@ Aplicación web oscura y responsive, accesible en **http://localhost:8091**. Tu 
 - **Servicios**: comprobaciones HTTP de endpoints que tú configures y alertas de disponibilidad.
 - **Security Center v0.4**: SELinux, firewalld, configuración efectiva SSH, sockets TCP/UDP, eventos de autenticación agregados, parámetros del kernel, hallazgos e historial; sin cambios automáticos. Sesiones HttpOnly, CSRF y auditoría.
 - **Histórico**: SQLite persistente, muestras de rendimiento y registro de acciones.
+- **Alertas y automatizaciones v0.6**: incidentes persistentes, reglas y umbrales, supervisión de Fedora/Docker/PostgreSQL/HTTP/TLS/restic, Telegram opt-in, silenciamiento, recuperación y timer systemd cada dos minutos.
 - **Backup & Recovery v0.5**: SQLite consistente, dumps de PostgreSQL, volúmenes y directorios Docker seleccionados, restic cifrado, programación diaria, retención, verificación profunda y restauración en staging seguro. Sin backups automáticos antes de DNF.
 
 ## Instalación en Fedora
@@ -47,6 +48,15 @@ python3 scripts/backup_schedule.py --enable 03:00
 ~~~
 
 El repositorio restic inicial es local y **debes conservar una copia cifrada externa y la contraseña fuera de Fedora**. No se activan backups al instalar. Consulta [Backup & Recovery](docs/BACKUP_RECOVERY.md) y la [guía de recuperación](docs/RECOVERY.md).
+
+## Activar alertas (opcional)
+
+~~~bash
+python3 scripts/alerts_setup.py --telegram
+python3 scripts/alerts_setup.py --enable
+~~~
+
+Luego en **Alertas → Reglas** habilita el motor y las notificaciones, y guarda los cambios. Consulta [Alertas y automatizaciones](docs/ALERTS_AUTOMATIONS.md). Las acciones administrativas **no se ejecutan automáticamente**.
 
 ## Arquitectura
 
@@ -89,7 +99,7 @@ CI en GitHub Actions: pruebas del backend/agente, compilación frontend y build 
 - [x] **Fase B — Fedora Package Manager**: DNF, Flatpak, paquetes instalados, pendientes, historial y ejecución bajo aprobación
 - [x] **Fase C — Security Center**: auditoría de solo lectura, recomendaciones, cobertura e historial
 - [x] **Extras 0.4.2**: SSH privilegiado mínimo opt-in, Postgres readiness, systemd, métricas históricas y TLS
-- [ ] Automatizaciones y notificaciones programadas
+- [x] **Fase E — Alertas y automatizaciones v0.6**: reglas, Telegram, incidentes, deduplicación, silenciamiento y monitoreo programado
 - [x] **Fase D — Backup & Recovery v0.5**: respaldos cifrados, inventario explícito, retención, programación, comprobación de integridad y restauración guiada sin sobrescritura de producción
 - [ ] Auditoría de seguridad avanzada
 - [ ] Diagnóstico asistido por IA
