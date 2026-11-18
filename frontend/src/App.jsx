@@ -256,7 +256,7 @@ function App() {
           <Title eyebrow="PROTECCIÓN" title="Seguridad del host" sub="Indicadores básicos de endurecimiento. No sustituyen una auditoría de vulnerabilidades."/>
           <div className="metrics three"><Metric icon={ShieldCheck} label="SELinux" value={host?.selinux || '—'} help="Modo de seguridad del sistema"/><Metric icon={Shield} label="firewalld" value={host?.services?.firewalld || '—'} help="Estado del firewall" color="blue"/><Metric icon={LockKeyhole} label="SSHD" value={host?.services?.sshd || '—'} help="Servicio de acceso remoto" color="purple"/></div>
           <Panel title="Controles de HomeLab OS" icon={ShieldCheck}><div className="security-list">
-            <div><CheckCircle2 size={18}/><span><strong>Acceso web limitado a localhost</strong><small>El servidor escucha 127.0.0.1:8090 usando la red del host.</small></span></div>
+            <div><CheckCircle2 size={18}/><span><strong>Acceso web limitado a localhost</strong><small>El servidor escucha 127.0.0.1:8091 usando la red del host.</small></span></div>
             <div><CheckCircle2 size={18}/><span><strong>Sesiones HTTP-only y protección CSRF</strong><small>Las operaciones de cambio requieren sesión y token CSRF.</small></span></div>
             <div><CheckCircle2 size={18}/><span><strong>Agente no privilegiado</strong><small>Sin shell remoto ni permisos root predeterminados.</small></span></div>
             <div><CheckCircle2 size={18}/><span><strong>Acciones Docker con lista permitida</strong><small>Los reinicios son opt-in y quedan registrados en la auditoría.</small></span></div>
@@ -269,7 +269,7 @@ function App() {
         </>}
         {tab === 'settings' && <>
           <Title eyebrow="PREFERENCIAS" title="Configuración" sub="Información del despliegue y conexiones del HomeLab."/>
-          <Panel title="Conexiones" icon={Settings2}><div className="kv"><span>Interfaz web</span><strong>127.0.0.1:8090</strong></div><div className="kv"><span>Agente host</span><Pill positive={agentOnline}>{agentOnline ? 'Conectado' : 'Desconectado'}</Pill></div><div className="kv"><span>Monitores activos</span><strong>{data?.services?.length || 0}</strong></div><div className="kv"><span>Cuenta</span><strong>{auth.username}</strong></div></Panel>
+          <Panel title="Conexiones" icon={Settings2}><div className="kv"><span>Interfaz web</span><strong>127.0.0.1:8091</strong></div><div className="kv"><span>Agente host</span><Pill positive={agentOnline}>{agentOnline ? 'Conectado' : 'Desconectado'}</Pill></div><div className="kv"><span>Monitores activos</span><strong>{data?.services?.length || 0}</strong></div><div className="kv"><span>Cuenta</span><strong>{auth.username}</strong></div></Panel>
           <Panel title="Próximos pasos" icon={Zap}><div className="settings-steps"><div><span>01</span><p><strong>Conecta el agente:</strong> ejecuta bash scripts/install.sh desde Fedora.</p></div><div><span>02</span><p><strong>Servicios:</strong> edita config/services.json para activar las verificaciones de Plex y tus aplicaciones.</p></div><div><span>03</span><p><strong>Reinicios:</strong> agrega nombres a HOMELAB_ALLOWED_CONTAINERS en .env y reinstala el agente.</p></div><div><span>04</span><p><strong>Acceso externo:</strong> configura Cloudflare Tunnel + Access antes de habilitar acceso desde Internet.</p></div></div></Panel>
         </>}
         <footer className="footer"><span>HomeLab OS v0.1.0</span><span>Diseñado para Fedora Linux · Actualización automática cada 20 s</span></footer>
