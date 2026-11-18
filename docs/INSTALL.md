@@ -1,8 +1,8 @@
 # Instalación de HomeLab OS en Fedora
 
-HomeLab OS corre en **http://localhost:8090**. Tiene dos componentes:
+HomeLab OS corre en **http://localhost:8091**. Tiene dos componentes:
 
-- **Web + API**: Docker Compose, red del host, FastAPI + React. Solo escucha 127.0.0.1:8090.
+- **Web + API**: Docker Compose, red del host, FastAPI + React. Solo escucha 127.0.0.1:8091.
 - **Agente nativo**: servicio systemd de usuario, escucha 127.0.0.1:18765. No requiere root.
 
 El agente consulta datos reales de Fedora con psutil, systemctl y la CLI de Docker. La API no monta el socket de Docker ni ejecuta comandos arbitrarios.
@@ -28,7 +28,7 @@ El instalador:
 4. Registra y arranca homelabos-agent como servicio de usuario.
 5. Construye y arranca la aplicación mediante Docker Compose.
 
-Abre **http://localhost:8090**. Para crear la primera cuenta introduce usuario, contraseña de 12 caracteres como mínimo y el token:
+Abre **http://localhost:8091**. Para crear la primera cuenta introduce usuario, contraseña de 12 caracteres como mínimo y el token:
 
 ~~~bash
 grep '^HOMELAB_SETUP_TOKEN=' .env
@@ -41,7 +41,7 @@ docker compose ps
 docker compose logs -f homelabos
 systemctl --user status homelabos-agent
 journalctl --user -u homelabos-agent -n 80 --no-pager
-curl -fsS http://127.0.0.1:8090/api/health
+curl -fsS http://127.0.0.1:8091/api/health
 ~~~
 
 Si quieres que el agente se ejecute cuando cierres sesión de Fedora, activa el lingering de systemd para tu usuario mediante loginctl con privilegios administrativos; hazlo solo si lo necesitas.
@@ -111,7 +111,7 @@ El script realiza una copia coherente de SQLite antes de enviarla cifrada a rest
 
 - **Agente desconectado**: comprueba systemctl --user y que HOMELAB_AGENT_TOKEN coincida entre .env y ~/.config/homelabos/agent.env.
 - **Docker no disponible**: prueba docker ps con el mismo usuario que ejecuta el agente.
-- **Puerto ocupado**: revisa ss -ltnp | grep :8090; detén el proceso que ocupa ese puerto antes de iniciar HomeLab OS.
+- **Puerto ocupado**: revisa ss -ltnp | grep :8091; detén el proceso que ocupa ese puerto antes de iniciar HomeLab OS.
 - **Problemas con SELinux**: conserva las opciones :Z en compose.yaml, comprueba permisos del directorio data y revisa audit.log antes de cambiar políticas. No desactives SELinux para solucionar problemas de montaje.
 - **La interfaz muestra datos vacíos**: no se simulan métricas; el agente debe estar activo y correctamente autenticado.
 
