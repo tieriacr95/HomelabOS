@@ -76,6 +76,10 @@ Navegador (http://localhost:8091)
 
 Por defecto solo escucha en loopback. No expongas el puerto directamente a Internet. Para acceso externo utiliza túnel HTTPS y Cloudflare Access.
 
+## Licencia
+
+Este proyecto se distribuye bajo la **GNU General Public License versión 3.0 (GPL-3.0-only)**. Consulta el archivo [LICENSE](LICENSE) para ver el texto completo. Puedes usar, estudiar, modificar y redistribuir el código conforme a las condiciones de la GPLv3. Esta licencia no otorga derechos sobre marcas de terceros ni sobre las credenciales, configuraciones o datos de los usuarios.
+
 ## Desarrollo y pruebas
 
 ~~~bash
