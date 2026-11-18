@@ -13,7 +13,7 @@ for line in env_file.read_text().splitlines():
     if not line or line.startswith("#") or "=" not in line:
         continue
     k, v = line.split("=", 1)
-    if k in ("HOMELAB_AGENT_TOKEN", "HOMELAB_ALLOWED_CONTAINERS"):
+    if k in ("HOMELAB_AGENT_TOKEN", "HOMELAB_ALLOWED_CONTAINERS", "HOMELAB_ALLOWED_SYSTEMD_UNITS"):
         values[k] = v
 token = values.get("HOMELAB_AGENT_TOKEN", "")
 if len(token) < 32:
@@ -29,7 +29,8 @@ for value in values.values():
         raise SystemExit("Invalid characters in agent configuration")
 agent_env.write_text(
     'HOMELAB_AGENT_TOKEN=' + token + '\n'
-    'HOMELAB_ALLOWED_CONTAINERS=' + values.get("HOMELAB_ALLOWED_CONTAINERS", "") + '\n'
+    'HOMELAB_ALLOWED_CONTAINERS=' + values.get("HOMELAB_ALLOWED_CONTAINERS", "") + '\n' +
+    'HOMELAB_ALLOWED_SYSTEMD_UNITS=' + values.get("HOMELAB_ALLOWED_SYSTEMD_UNITS", "") + '\n'
 )
 agent_env.chmod(0o600)
 
@@ -44,6 +45,7 @@ def root_owned_safe(path):
         return False
 
 privileged_mode = root_owned_safe(helper) and root_owned_safe(sudoers)
+ssh_audit_mode = root_owned_safe(Path("/usr/local/libexec/homelabos/ssh-audit-helper")) and root_owned_safe(Path("/etc/sudoers.d/homelabos-ssh-audit"))
 print("Package helper: " + ("enabled (reduced agent sandbox)" if privileged_mode
                             else "disabled (read-only DNF)"))
 
@@ -58,9 +60,9 @@ unit.write_text(
     "EnvironmentFile=" + shlex.quote(str(agent_env)) + "\n"
     "ExecStart=" + shlex.quote(str(python)) + " " + shlex.quote(str(agent)) + "\n"
     "Restart=on-failure\nRestartSec=5\n"
-    + ("NoNewPrivileges=false\n" if privileged_mode else
-     "NoNewPrivileges=true\nProtectSystem=strict\nProtectHome=read-only\n"
-     "ReadWritePaths=-%h/.local/share/flatpak -%h/.cache\n")
+    + ("NoNewPrivileges=false\n" if (privileged_mode or ssh_audit_mode) else "NoNewPrivileges=true\n")
+    + ("" if privileged_mode else "ProtectSystem=strict\nProtectHome=read-only\n"
+       "ReadWritePaths=-%h/.local/share/flatpak -%h/.cache\n")
     + "PrivateTmp=true\nRestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX\n"
     "UMask=0077\n\n"
     "[Install]\nWantedBy=default.target\n"

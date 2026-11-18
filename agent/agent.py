@@ -15,17 +15,19 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import unquote, urlsplit, parse_qs
 
 if __package__:
-    from . import docker_manager, package_manager, security_center
+    from . import docker_manager, package_manager, security_center, enhancements
 else:
     import docker_manager
     import package_manager
     import security_center
+    import enhancements
 
 import psutil
 
 TOKEN = os.getenv("HOMELAB_AGENT_TOKEN", "")
 PORT = int(os.getenv("HOMELAB_AGENT_PORT", "18765"))
 ALLOWED = {s.strip() for s in os.getenv("HOMELAB_ALLOWED_CONTAINERS", "").split(",") if s.strip()}
+SYSTEMD_ALLOWED = {x.strip() for x in os.getenv("HOMELAB_ALLOWED_SYSTEMD_UNITS", "").split(",") if x.strip()}
 SERVICES = ("docker", "sshd", "firewalld", "NetworkManager", "cloudflared")
 
 
@@ -150,6 +152,10 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 return self.reply(500, {"error": "collector_error"})
         path = urlsplit(self.path)
+        if path.path == "/v1/extras/postgres":
+            return self.reply(200, enhancements.postgres_checks())
+        if path.path == "/v1/extras/systemd":
+            return self.reply(200, enhancements.systemd_units(SYSTEMD_ALLOWED))
         if path.path == "/v1/security/report":
             try:
                 refresh = parse_qs(path.query).get("refresh", ["false"])[0] == "true"
@@ -201,6 +207,24 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if not self.authorized():
             return self.reply(401, {"error": "unauthorized"})
+        sysd = re.fullmatch(r"/v1/extras/systemd/(user|system)/([^/]+)/(start|stop|restart)", self.path)
+        if sysd:
+            try:
+                size = int(self.headers.get("Content-Length", "0"))
+                if size < 0 or size > 512:
+                    return self.reply(413, {"error": "oversized_body"})
+                payload = json.loads(self.rfile.read(size) or b"{}")
+                scope, unit, operation = sysd.groups()
+                confirmed = payload.get("confirmation_text", "")
+                if not isinstance(confirmed, str) or len(confirmed) > 200:
+                    return self.reply(422, {"error": "invalid_confirmation"})
+                result = enhancements.systemd_execute(
+                    scope, unquote(unit), operation, SYSTEMD_ALLOWED, confirmed)
+                return self.reply(200 if result["ok"] else 502, result)
+            except PermissionError:
+                return self.reply(403, {"error": "systemd_not_allowed"})
+            except (ValueError, AttributeError, TypeError):
+                return self.reply(422, {"error": "invalid_request"})
         pkg = re.fullmatch(r"/v1/packages/upgrade/(dnf|flatpak-user|flatpak-system)", self.path)
         if pkg:
             try:

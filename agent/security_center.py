@@ -134,9 +134,13 @@ def ssh_status():
     rc, raw, _ = run(binary, "-T", "-C", "user=root,host=localhost,addr=127.0.0.1",
                      timeout=6, max_bytes=50_000)
     if rc:
+        helper = Path("/usr/local/libexec/homelabos/ssh-audit-helper")
+        if helper.is_file() and os.access(helper, os.X_OK):
+            rc, raw, _ = run("sudo", "-n", str(helper), timeout=10, max_bytes=5000)
+    if rc:
         return {"service": service, "socket_service": socket_service,
                 "available": False, "not_applicable": False, "effective": {},
-                "error": "sshd -T falló; puede requerir leer claves o archivos protegidos. Verifica la salida en una terminal, sin elevar el agente"}
+                "error": "sshd -T necesita leer archivos protegidos. Instala el helper SSH opt-in, o verifica la configuración desde tu terminal."}
     config = {}
     for line in raw.splitlines():
         key, _, value = line.partition(" ")

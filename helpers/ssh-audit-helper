@@ -1,0 +1,32 @@
+#!/usr/bin/python3
+"""Root-owned, zero-argument SSH configuration reader. Prints only safe keys."""
+import os
+import subprocess
+import sys
+
+ALLOWED = {
+    "port", "permitrootlogin", "passwordauthentication",
+    "pubkeyauthentication", "permitemptypasswords", "maxauthtries",
+    "x11forwarding", "allowagentforwarding", "kbdinteractiveauthentication",
+}
+
+def main():
+    if len(sys.argv) != 1 or os.geteuid() != 0:
+        raise SystemExit("Must execute as root, without arguments")
+    executable = "/usr/sbin/sshd"
+    if not os.path.isfile(executable):
+        raise SystemExit("OpenSSH server not installed")
+    result = subprocess.run(
+        [executable, "-T", "-C", "user=root,host=localhost,addr=127.0.0.1"],
+        capture_output=True, timeout=8, check=False, env={
+            "PATH": "/usr/sbin:/usr/bin", "LC_ALL": "C", "LANG": "C"
+        })
+    if result.returncode:
+        raise SystemExit("Unable to inspect sshd configuration")
+    for line in result.stdout.decode("utf-8", "replace").splitlines():
+        key, sep, value = line.partition(" ")
+        if sep and key in ALLOWED and len(value) <= 80:
+            print(key + " " + value)
+
+if __name__ == "__main__":
+    main()

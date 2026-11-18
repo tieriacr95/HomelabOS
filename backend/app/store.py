@@ -64,6 +64,16 @@ def initialize():
           firewall TEXT NOT NULL
         );
         CREATE INDEX IF NOT EXISTS idx_security_scans_time ON security_scans(timestamp);
+        CREATE TABLE IF NOT EXISTS container_metrics (
+          id INTEGER PRIMARY KEY,
+          timestamp INTEGER NOT NULL,
+          container TEXT NOT NULL,
+          cpu_percent REAL NOT NULL,
+          mem_percent REAL NOT NULL,
+          pids INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_container_metrics_time_name
+          ON container_metrics(timestamp, container);
         """)
 
 
@@ -185,3 +195,67 @@ def security_history(days=7):
                    checks_available,ssh_failed,selinux,firewall
             FROM security_scans WHERE timestamp>=? ORDER BY timestamp DESC LIMIT 150
         """, (since,)).fetchall()]
+
+
+def _percent(text):
+    try:
+        value = float(str(text).strip().rstrip("%"))
+        if not (0 <= value <= 100000):
+            raise ValueError("Out of bounds")
+        return round(value, 3)
+    except (TypeError, ValueError):
+        return None
+
+
+def record_container_stats(snapshot):
+    """Persist metric samples at most once per minute, independent of dashboard."""
+    import re
+    now = int(time.time())
+    if not isinstance(snapshot, dict) or snapshot.get("error"):
+        return 0
+    items = snapshot.get("items", [])
+    if not isinstance(items, list):
+        return 0
+    rows = []
+    for item in items[:400]:
+        if not isinstance(item, dict):
+            continue
+        name = item.get("name", "")
+        if not isinstance(name, str) or not re.fullmatch(
+                r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}", name):
+            continue
+        cpu = _percent(item.get("cpu"))
+        memory = _percent(item.get("memory_percent"))
+        if cpu is None or memory is None:
+            continue
+        try:
+            pids = max(0, int(item.get("pids", 0)))
+        except (ValueError, TypeError):
+            pids = 0
+        rows.append((now, name, cpu, memory, pids))
+    if not rows:
+        return 0
+    with connect() as db:
+        recent = db.execute("SELECT max(timestamp) FROM container_metrics").fetchone()[0]
+        if recent is not None and now - recent < 60:
+            return 0
+        db.executemany("""INSERT INTO container_metrics
+            (timestamp,container,cpu_percent,mem_percent,pids)
+            VALUES (?,?,?,?,?)""", rows)
+        db.execute("DELETE FROM container_metrics WHERE timestamp<?",
+                   (now - 30 * 86400,))
+    return len(rows)
+
+
+def container_history(name, hours=24):
+    import re
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}", name):
+        raise ValueError("Invalid container name")
+    if hours not in (1, 6, 24, 168, 720):
+        raise ValueError("Invalid range")
+    since = int(time.time()) - hours * 3600
+    with connect() as db:
+        return [dict(row) for row in db.execute("""
+            SELECT timestamp,cpu_percent,mem_percent,pids FROM container_metrics
+            WHERE container=? AND timestamp>=? ORDER BY timestamp DESC LIMIT 1000
+        """, (name, since)).fetchall()][::-1]

@@ -25,6 +25,7 @@ if not p.exists():
         'HOMELAB_SETUP_TOKEN=' + secrets.token_urlsafe(32) + '\n'
         'HOMELAB_COOKIE_SECURE=false\n'
         'HOMELAB_ALLOWED_CONTAINERS=\n'
+        'HOMELAB_ALLOWED_SYSTEMD_UNITS=\n'
         'LOCAL_UID=' + str(os.getuid()) + '\n'
         'LOCAL_GID=' + str(os.getgid()) + '\n'
     )
