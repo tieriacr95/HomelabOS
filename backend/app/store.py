@@ -247,15 +247,72 @@ def record_container_stats(snapshot):
     return len(rows)
 
 
-def container_history(name, hours=24):
-    import re
-    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}", name):
-        raise ValueError("Invalid container name")
-    if hours not in (1, 6, 24, 168, 720):
+def _bucket_seconds(hours):
+    return {1:60,6:300,24:900,168:3600,720:21600}[hours]
+
+
+def host_history(hours=24):
+    """Time buckets avoid truncating 30 days to a misleading first 1000 rows."""
+    if hours not in (1,6,24,168,720):
         raise ValueError("Invalid range")
-    since = int(time.time()) - hours * 3600
+    since=int(time.time())-hours*3600
+    bucket=_bucket_seconds(hours)
     with connect() as db:
         return [dict(row) for row in db.execute("""
-            SELECT timestamp,cpu_percent,mem_percent,pids FROM container_metrics
-            WHERE container=? AND timestamp>=? ORDER BY timestamp DESC LIMIT 1000
-        """, (name, since)).fetchall()][::-1]
+            SELECT (timestamp / ?)*? AS timestamp,
+                ROUND(AVG(cpu),2) AS cpu, ROUND(AVG(memory),2) AS memory,
+                ROUND(AVG(disk),2) AS disk, ROUND(AVG(running_containers),2) AS running_containers,
+                count(*) AS samples
+            FROM metrics WHERE timestamp>=?
+            GROUP BY (timestamp / ?) ORDER BY timestamp LIMIT 1000
+        """,(bucket,bucket,since,bucket))]
+
+
+def host_forecast(hours=168):
+    """Conservative straight-line *projection*, not a predictive alert."""
+    if hours not in (1,6,24,168,720):
+        raise ValueError("Invalid range")
+    rows=host_history(hours)
+    if len(rows)<12 or rows[-1]["timestamp"]-rows[0]["timestamp"]<12*3600:
+        return {"available":False,"reason":"Se necesitan al menos 12 horas de muestras para proyectar"}
+    days=(rows[-1]["timestamp"]-rows[0]["timestamp"])/86400
+    if days<=0:
+        return {"available":False}
+    result={"available":True,"method":"linear_indicative","horizon_hours":24,"metrics":{}}
+    n=len(rows)
+    for key in ("cpu","memory","disk"):
+        # Use first/last 20% average to reduce individual sensor spikes.
+        count=max(3,n//5)
+        first=sum(float(row[key]) for row in rows[:count])/count
+        last=sum(float(row[key]) for row in rows[-count:])/count
+        per_day=(last-first)/days
+        if key=="disk":
+            projection=max(0,min(100,round(last+per_day,1)))
+            result["metrics"][key]={"latest":round(last,1),
+                                   "change_per_day":round(per_day,2),
+                                   "projected_24h":projection}
+        else:
+            result["metrics"][key]={"latest":round(last,1),
+                                   "change_per_day":round(per_day,2),
+                                   "projected_24h":max(0,min(100,round(last+per_day,1)))}
+    result["note"]="Extrapolación lineal indicativa de promedios, sin garantías. No activa reparaciones automáticas."
+    return result
+
+
+def container_history(name, hours=24):
+    import re
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}",name):
+        raise ValueError("Invalid container name")
+    if hours not in (1,6,24,168,720):
+        raise ValueError("Invalid range")
+    since=int(time.time())-hours*3600
+    bucket=_bucket_seconds(hours)
+    with connect() as db:
+        return [dict(row) for row in db.execute("""
+            SELECT (timestamp / ?)*? AS timestamp,
+                   ROUND(AVG(cpu_percent),3) AS cpu_percent,
+                   ROUND(AVG(mem_percent),3) AS mem_percent,
+                   ROUND(AVG(pids),1) AS pids, count(*) AS samples
+            FROM container_metrics WHERE container=? AND timestamp>=?
+            GROUP BY (timestamp / ?) ORDER BY timestamp LIMIT 1000
+        """,(bucket,bucket,name,since,bucket))]

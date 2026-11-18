@@ -15,7 +15,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import unquote, urlsplit, parse_qs
 
 if __package__:
-    from . import docker_manager, package_manager, security_center, enhancements, backup_manager, alerts_manager
+    from . import docker_manager, package_manager, security_center, enhancements, backup_manager, alerts_manager, image_updates
 else:
     import docker_manager
     import package_manager
@@ -23,6 +23,7 @@ else:
     import enhancements
     import backup_manager
     import alerts_manager
+    import image_updates
 
 import psutil
 
@@ -194,6 +195,18 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(200, package_manager.upgrade_status(package_job.group(1)))
             except LookupError:
                 return self.reply(404, {"error": "not_found"})
+        if path.path == "/v1/docker/image-updates/jobs":
+            return self.reply(200, {"items": image_updates.jobs()})
+        pull_preview = re.fullmatch(r"/v1/docker/image-updates/([^/]+)/preview", path.path)
+        if pull_preview:
+            try:
+                return self.reply(200, image_updates.inspect_target(unquote(pull_preview.group(1)), ALLOWED))
+            except PermissionError:
+                return self.reply(403, {"error": "not_allowlisted"})
+            except ValueError:
+                return self.reply(422, {"error": "unsupported_image"})
+            except RuntimeError:
+                return self.reply(503, {"error": "docker_unavailable"})
         if path.path == "/v1/docker/inventory":
             return self.reply(200, docker_manager.inventory(ALLOWED))
         if path.path == "/v1/docker/stats":
@@ -271,6 +284,7 @@ class Handler(BaseHTTPRequestHandler):
                     "telegram_credentials_unreadable", "telegram_bad_request",
                     "telegram_invalid_token", "telegram_chat_forbidden",
                     "telegram_conflict", "telegram_rate_limited",
+                    "telegram_target_is_bot",
                     "telegram_rejected", "telegram_http_error",
                     "telegram_network_error", "telegram_invalid_response",
                 }
@@ -333,6 +347,25 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(409, {"error": "upgrade_already_running"})
             except (ValueError, TypeError, AttributeError):
                 return self.reply(422, {"error": "invalid_request"})
+        pull = re.fullmatch(r"/v1/docker/image-updates/([^/]+)/pull", self.path)
+        if pull:
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if length < 0 or length > 512:
+                    return self.reply(413, {"error": "oversized_body"})
+                body = json.loads(self.rfile.read(length) or b"{}")
+                if not isinstance(body,dict) or set(body) != {"confirmation_text", "running_image_id"}:
+                    return self.reply(422, {"error": "invalid_payload"})
+                result = image_updates.submit(
+                    unquote(pull.group(1)), body["confirmation_text"],
+                    body["running_image_id"], ALLOWED)
+                return self.reply(202, result)
+            except PermissionError:
+                return self.reply(403, {"error": "not_allowlisted_or_confirmation_failed"})
+            except (ValueError, TypeError, AttributeError):
+                return self.reply(422, {"error": "unsupported_image_or_payload"})
+            except RuntimeError:
+                return self.reply(409, {"error": "docker_unavailable_or_pull_busy"})
         transaction = re.fullmatch(
             r"/v1/docker/execute/(container|project)/([^/]+)/(start|stop|restart)", self.path)
         if transaction:

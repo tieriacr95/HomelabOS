@@ -25,6 +25,8 @@ from .security_api import make_router as make_security_router
 from .extras_api import make_router as make_extras_router
 from .backup_api import make_router as make_backup_router
 from .alerts_api import make_router as make_alerts_router
+from .observability import make_router as make_observability_router
+from .image_updates_api import make_router as make_image_updates_router
 
 AGENT = os.getenv("HOMELAB_AGENT_URL", "http://127.0.0.1:18765").rstrip("/")
 AGENT_TOKEN = os.getenv("HOMELAB_AGENT_TOKEN", "")
@@ -38,9 +40,17 @@ failed_logins = {}
 
 
 async def sample_container_metrics():
-    """Collect samples when nobody is viewing the Docker tab."""
+    """Collect Docker and host metrics even with no browser open."""
+    counter = 0
     while True:
         await asyncio.sleep(60)
+        counter += 1
+        if counter % 5 == 0:
+            try:
+                host = await agent_request("GET", "/v1/snapshot", timeout=20)
+                store.add_metric(host)
+            except (httpx.HTTPError, RuntimeError, ValueError, OSError):
+                pass
         try:
             stats = await agent_request("GET", "/v1/docker/stats", timeout=25)
             store.record_container_stats(stats)
@@ -76,6 +86,8 @@ async def security_headers(request: Request, call_next):
         "connect-src 'self'; img-src 'self' data:; font-src 'self'; object-src 'none'; "
         "frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
     )
+    if request.url.path in ("/sw.js","/manifest.webmanifest"):
+        response.headers["Cache-Control"] = "no-cache"
     if request.url.path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-store"
     return response
@@ -122,7 +134,7 @@ def establish_session(response: Response, username: str):
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "version": "0.6.0"}
+    return {"status": "ok", "version": "0.6.5"}
 
 
 @app.get("/api/auth/status")
@@ -249,9 +261,9 @@ async def dashboard(user=Depends(current_user)):
 
 @app.get("/api/history")
 def history(hours: int = 24, user=Depends(current_user)):
-    if hours not in (1, 6, 24, 168):
+    if hours not in (1, 6, 24, 168, 720):
         raise HTTPException(422, "Rango no válido")
-    return {"items": store.history(hours)}
+    return {"items": store.host_history(hours)}
 
 
 @app.get("/api/audit")
@@ -279,6 +291,8 @@ async def restart_container(name: str, body: ConfirmBody, user=Depends(csrf_user
     return result
 
 
+app.include_router(make_observability_router(current_user, lambda *args, **kwargs: agent_request(*args, **kwargs), store))
+app.include_router(make_image_updates_router(current_user, csrf_user, lambda *args, **kwargs: agent_request(*args, **kwargs), store))
 app.include_router(make_router(current_user, csrf_user, lambda *args, **kwargs: agent_request(*args, **kwargs), store))
 app.include_router(make_package_router(current_user, csrf_user, lambda *args, **kwargs: agent_request(*args, **kwargs), store))
 app.include_router(make_security_router(current_user, lambda *args, **kwargs: agent_request(*args, **kwargs), store))
@@ -290,6 +304,24 @@ app.include_router(make_extras_router(current_user, csrf_user,
     lambda *args, **kwargs: agent_request(*args, **kwargs), store,
     SERVICES_PATH, Path(os.getenv("HOMELAB_TLS_PATH", "/config/tls_endpoints.json"))))
 
+
+if (FRONTEND / "pwa").exists():
+    app.mount("/pwa", StaticFiles(directory=FRONTEND / "pwa"), name="pwa")
+
+@app.get("/manifest.webmanifest", include_in_schema=False)
+def pwa_manifest():
+    file = FRONTEND / "manifest.webmanifest"
+    if not file.is_file():
+        raise HTTPException(404,"PWA manifest unavailable")
+    return FileResponse(file,media_type="application/manifest+json")
+
+@app.get("/sw.js", include_in_schema=False)
+def service_worker():
+    file = FRONTEND / "sw.js"
+    if not file.is_file():
+        raise HTTPException(404,"Service worker unavailable")
+    return FileResponse(file,media_type="application/javascript",
+                        headers={"Service-Worker-Allowed":"/","Cache-Control":"no-cache"})
 
 if (FRONTEND / "assets").exists():
     app.mount("/assets", StaticFiles(directory=FRONTEND / "assets"), name="assets")

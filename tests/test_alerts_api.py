@@ -111,3 +111,18 @@ def test_telegram_never_relays_unknown_error_messages(session,monkeypatch):
     assert result.status_code==409
     assert secret not in result.text
     assert "Operación rechazada" in result.text
+
+
+def test_telegram_bot_as_target_error_explains_incorrect_chat_id(session, monkeypatch):
+    import httpx
+    client,csrf=session
+    request=httpx.Request("POST","http://127.0.0.1:18765/v1/alerts/telegram/test")
+    response=httpx.Response(409,request=request,json={"error":"telegram_target_is_bot"})
+    async def relay(method,path,body=None,timeout=35):
+        raise httpx.HTTPStatusError("Rejected",request=request,response=response)
+    monkeypatch.setattr(main,"agent_request",relay)
+    result=client.post("/api/alerts/telegram/test",
+          headers={"X-CSRF-Token":csrf},json={"confirm":True})
+    assert result.status_code==409
+    assert "chat ID" in result.json()["detail"]
+    assert "bot" in result.json()["detail"]

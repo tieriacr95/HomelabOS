@@ -205,9 +205,18 @@ def _notify(text):
             raise AlertError(TELEGRAM_FAILURES.get(code, "telegram_rejected"))
         return True
     except urllib.error.HTTPError as exc:
-        # HTTPError is also URLError. Never log or propagate the URL because
-        # Telegram embeds the secret bot token in the request path.
-        raise AlertError(TELEGRAM_FAILURES.get(exc.code, "telegram_http_error")) from None
+        # Telegram URL includes the bot token. Parse only a known error category,
+        # never relay exception text, raw descriptions, URL or response body.
+        error = TELEGRAM_FAILURES.get(exc.code, "telegram_http_error")
+        if exc.code == 403:
+            try:
+                payload = json.loads(exc.read(2048))
+                description = str(payload.get("description", "")).lower()
+                if "can't send messages to the bot" in description or "can't send messages to bots" in description:
+                    error = "telegram_target_is_bot"
+            except (OSError, ValueError, AttributeError):
+                pass
+        raise AlertError(error) from None
     except urllib.error.URLError:
         raise AlertError("telegram_network_error") from None
     except (TimeoutError, ConnectionError, OSError):
@@ -330,12 +339,14 @@ def record_results(checks, config, now=None, sender=None):
             recovered_at = previous["recovered_at"]
             notified_open = previous["notified_open"]
             pending_recovery = previous["pending_recovery"]
+            acknowledged_at = previous["acknowledged_at"]
             if status == "fail" and previous["state"] in ("healthy","resolved"):
                 next_state = "pending"
                 opened_at = None
                 recovered_at = None
                 notified_open = 0
                 pending_recovery = 0
+                acknowledged_at = None
             if status == "fail" and failures >= config["consecutive_failures"]:
                 if next_state != "open":
                     next_state = "open"
@@ -352,9 +363,9 @@ def record_results(checks, config, now=None, sender=None):
                     pending_recovery = 0
             db.execute("""UPDATE incidents SET category=?,subject=?,title=?,
                 severity=?,state=?,failures=?,last_seen=?,opened_at=?,recovered_at=?,
-                notified_open=?,pending_recovery=? WHERE id=?""",
+                notified_open=?,pending_recovery=?,acknowledged_at=? WHERE id=?""",
                 (kind,subject,title,item.get("severity","warning"),next_state,failures,
-                 now,opened_at,recovered_at,notified_open,pending_recovery,previous["id"]))
+                 now,opened_at,recovered_at,notified_open,pending_recovery,acknowledged_at,previous["id"]))
             new = _one(db,key)
             can_send = bool(config["notify_telegram"] and
                             telegram_status()["configured"] and
@@ -628,9 +639,20 @@ def summary():
             "SELECT * FROM checks ORDER BY key LIMIT 200")]
     scheduled=_timer_active()
     maintenance=_timer_active("homelabos-maintenance.timer")
+    last_run=dict(latest) if latest else None
+    age=int(time.time())-int(latest["timestamp"]) if latest else None
+    diagnostics={
+        "timer_enabled":scheduled,
+        "engine_enabled":config["enabled"],
+        "telegram_ready":telegram_status()["configured"],
+        "last_run_age_seconds":age,
+        "monitor_stale":bool(config["enabled"] and scheduled and (age is None or age>600)),
+        "unknown_checks":sum(c["status"]=="unknown" for c in checks),
+    }
     return {"rules":config,"telegram":telegram_status(),"timer":scheduled,
             "maintenance_timer":maintenance,"incidents":incident,"events":recent,"checks":checks,
-            "last_run":dict(latest) if latest else None}
+            "diagnostics":diagnostics,
+            "last_run":last_run}
 
 
 def _timer_active(name="homelabos-alerts.timer"):

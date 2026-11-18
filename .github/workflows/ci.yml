@@ -47,6 +47,12 @@ jobs:
           test -s dist/assets/app.css
           grep -q '/assets/app.js' dist/index.html
           grep -q '/assets/app.css' dist/index.html
+          test -s dist/manifest.webmanifest
+          test -s dist/sw.js
+          test -s dist/pwa/icon-192.png
+          test -s dist/pwa/icon-512.png
+          grep -q 'apple-mobile-web-app-title' dist/index.html
+          ! grep -q 'api/' dist/sw.js || grep -q 'NEVER cache HTML' dist/sw.js
 
   docker-build:
     runs-on: ubuntu-latest

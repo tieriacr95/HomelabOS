@@ -15,6 +15,7 @@ SAFE_ERRORS = {
     "telegram_invalid_token": "Telegram rechazó el token del bot (401/404). Reconfigúralo en Fedora con --replace.",
     "telegram_bad_request": "Telegram rechazó la solicitud (400). Revisa el ID del chat y abre una conversación con el bot antes de probar.",
     "telegram_chat_forbidden": "Telegram denegó enviar al chat (403). Inicia el bot con /start o comprueba que esté agregado al grupo.",
+    "telegram_target_is_bot": "El chat ID corresponde a una cuenta de bot. Telegram no permite mensajes de bot a bot: usa el chat ID personal o de un grupo donde esté agregado.",
     "telegram_conflict": "Telegram notificó un conflicto (409). Revisa el estado del bot.",
     "telegram_rate_limited": "Telegram limitó temporalmente los mensajes (429). Espera antes de repetir la prueba.",
     "telegram_rejected": "Telegram rechazó el envío. Comprueba el bot y su chat.",

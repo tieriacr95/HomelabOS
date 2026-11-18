@@ -214,3 +214,41 @@ def test_telegram_status_rejects_non_object_json(configured):
     result = am.telegram_status()
     assert result["configured"] is False
     assert "JSON" in result["error"]
+
+
+def test_bot_to_bot_telegram_403_is_actionable_and_sanitized(configured, monkeypatch):
+    from urllib.error import HTTPError
+    import io
+    token = "123456789:" + "x" * 35
+    am._write_private(am.TELEGRAM, {"bot_token": token, "chat_id": "999999"})
+    def refuse(req, timeout):
+        payload=json.dumps({"ok":False,"error_code":403,
+                           "description":"Forbidden: the bot can't send messages to the bot"}).encode()
+        raise HTTPError(req.full_url,403,"Forbidden",{},io.BytesIO(payload))
+    monkeypatch.setattr(am.urllib.request,"urlopen",refuse)
+    with pytest.raises(am.AlertError) as exc:
+        am.test_telegram()
+    assert str(exc.value) == "telegram_target_is_bot"
+    assert token not in str(exc.value)
+
+
+def test_acknowledgment_resets_on_new_incident(configured, monkeypatch):
+    current=am.rules()
+    current["consecutive_failures"]=1
+    am.record_results([sample("fail")],current,now=10000)
+    iid=am.summary()["incidents"][0]["id"]
+    am.incident_action(iid,"acknowledge")
+    am.record_results([sample("ok")],current,now=10100)
+    assert not am.summary()["incidents"]
+    am.record_results([sample("fail")],current,now=10200)
+    reopened=am.summary()["incidents"][0]
+    assert reopened["id"]==iid
+    assert reopened["acknowledged_at"] is None
+
+
+def test_diagnostics_do_not_expose_secrets(configured, monkeypatch):
+    status=am.summary()
+    assert "diagnostics" in status
+    assert status["diagnostics"]["engine_enabled"] is False
+    assert status["diagnostics"]["last_run_age_seconds"] is None
+    assert "token" not in str(status["diagnostics"]).lower()

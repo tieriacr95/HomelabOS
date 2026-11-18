@@ -15,6 +15,8 @@ Aplicación web oscura y responsive, accesible en **http://localhost:8091**. Tu 
 - **Security Center v0.4**: SELinux, firewalld, configuración efectiva SSH, sockets TCP/UDP, eventos de autenticación agregados, parámetros del kernel, hallazgos e historial; sin cambios automáticos. Sesiones HttpOnly, CSRF y auditoría.
 - **Histórico**: SQLite persistente, muestras de rendimiento y registro de acciones.
 - **Alertas y automatizaciones v0.6**: incidentes persistentes, reglas y umbrales, supervisión de Fedora/Docker/PostgreSQL/HTTP/TLS/restic, Telegram opt-in, silenciamiento, recuperación y timer systemd cada dos minutos y verificación opcional semanal del repositorio cifrado.
+- **Observabilidad v0.6.2–v0.6.4**: salud global y topología Compose, descargas de imágenes Docker aprobadas y métricas CPU/RAM/disco de 30 días con tendencias indicativas.
+- **PWA v0.6.5**: instalable desde Safari en iPhone mediante HTTPS, con caché únicamente de archivos públicos estáticos.
 - **Backup & Recovery v0.5**: SQLite consistente, dumps de PostgreSQL, volúmenes y directorios Docker seleccionados, restic cifrado, programación diaria, retención, verificación profunda y restauración en staging seguro. Sin backups automáticos antes de DNF.
 
 ## Instalación en Fedora
@@ -57,6 +59,16 @@ python3 scripts/alerts_setup.py --enable
 ~~~
 
 Luego en **Alertas → Reglas** habilita el motor y las notificaciones, y guarda los cambios. Consulta [Alertas y automatizaciones](docs/ALERTS_AUTOMATIONS.md). Las acciones administrativas **no se ejecutan automáticamente**.
+
+## Observabilidad y aplicación móvil
+
+En el menú encontrarás **Salud global**, **Históricos 30 días** e **Imágenes Docker**.
+Las descargas de imágenes se limitan a contenedores autorizados; nunca
+recrean o reinician servicios automáticamente. En iPhone, abre HomeLab OS
+mediante HTTPS con acceso protegido, luego Safari → Compartir →
+Añadir a pantalla de inicio. No se almacenan datos de sesión offline.
+
+Detalles, límites y pruebas: [Versiones 0.6.1–0.6.5](docs/RELEASE_0_6_5.md).
 
 ## Arquitectura
 
@@ -106,6 +118,11 @@ CI en GitHub Actions: pruebas del backend/agente, compilación frontend y build 
 - [x] **Fase E — Alertas y automatizaciones v0.6**: reglas, Telegram, incidentes, deduplicación, silenciamiento y monitoreo programado
 - [x] **Fase D — Backup & Recovery v0.5**: respaldos cifrados, inventario explícito, retención, programación, comprobación de integridad y restauración guiada sin sobrescritura de producción
 - [ ] Auditoría de seguridad avanzada
+- [x] **v0.6.1**: consolidación de incidentes, diagnóstico Telegram y revisión de permisos
+- [x] **v0.6.2**: dashboard global de salud y topología Compose informativa
+- [x] **v0.6.3**: descarga autorizada de imágenes Docker sin cambiar contenedores activos
+- [x] **v0.6.4**: métricas históricas agregadas de 30 días y proyecciones indicativas
+- [x] **v0.6.5**: PWA instalable desde Safari en iPhone, sin caché de datos privados
 - [ ] Diagnóstico asistido por IA
 - [ ] Administración de múltiples hosts Linux
 
