@@ -1,12 +1,32 @@
 [
   {
-    "name": "Plex",
-    "url": "http://127.0.0.1:32400/identity",
-    "enabled": false
-  },
-  {
     "name": "Personal Planner",
     "url": "http://127.0.0.1:8080/api/health",
-    "enabled": false
+    "enabled": true
+  },
+  {
+    "name": "Finance OS",
+    "url": "http://127.0.0.1:8089/",
+    "enabled": true
+  },
+  {
+    "name": "Cloud Engineer Lab",
+    "url": "http://127.0.0.1:8090/",
+    "enabled": true
+  },
+  {
+    "name": "HomeLab OS",
+    "url": "http://127.0.0.1:8091/api/health",
+    "enabled": true
+  },
+  {
+    "name": "Plex",
+    "url": "http://127.0.0.1:32400/identity",
+    "enabled": true
+  },
+  {
+    "name": "Homepage",
+    "url": "http://127.0.0.1:3000/",
+    "enabled": true
   }
 ]
