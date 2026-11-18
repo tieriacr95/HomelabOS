@@ -12,5 +12,5 @@ COPY backend/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 COPY backend/app/ /app/app/
 COPY --from=ui /frontend/dist/ /app/public/
-EXPOSE 8090
-CMD ["uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8090", "--no-server-header"]
+EXPOSE 8091
+CMD ["uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8091", "--no-server-header"]
