@@ -90,6 +90,16 @@ bash scripts/install.sh
 
 El instalador no sustituye .env ni borra la base de datos.
 
+## Actualizaciones Fedora (Fase B)
+
+La pestaña **Actualizaciones** permite consultar DNF5 y Flatpak en modo lectura. Para activar actualizaciones DNF y Flatpak del sistema debes instalar de manera explícita un helper root revisable:
+
+~~~bash
+bash scripts/install_package_helper.sh
+~~~
+
+Esto configura dos comandos exactos en sudoers y vuelve a registrar el servicio del agente con un aislamiento de systemd menos restrictivo; consulta [documentación y riesgos](PACKAGE_MANAGER.md).
+
 ## Acceso remoto
 
 El despliegue está diseñado para **localhost** por defecto. No publiques directamente el puerto sin autenticación adicional. Si usas Cloudflare Tunnel, protege la ruta con Cloudflare Access y HTTPS.
@@ -123,4 +133,4 @@ El script realiza una copia coherente de SQLite antes de enviarla cifrada a rest
 
 Implementado: autenticación inicial y login, panel responsive, métricas Fedora, temperaturas disponibles, disco, procesos, servicios systemd, Docker Manager 2.0 (contenedores, imágenes, redes, volúmenes, proyectos Compose, métricas, logs y acciones opt-in), comprobaciones HTTP, alertas por umbral, historial SQLite y auditoría básica, backup cifrado manual y pruebas CI.
 
-Pendiente para futuras versiones: actualizaciones DNF/Flatpak con autorización, tareas automáticas, análisis avanzado de seguridad, restauración asistida, asistente IA y administración multi-host.
+Pendiente para futuras versiones: tareas automáticas, análisis avanzado de seguridad, restauración asistida, asistente IA y administración multi-host.

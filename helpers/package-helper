@@ -1,0 +1,31 @@
+#!/usr/bin/python3
+"""HomeLab OS tightly scoped root package helper.
+
+Install this script to a root-owned directory with scripts/install_package_helper.sh.
+sudoers authorizes precisely one of the two literal subcommands below.
+"""
+import os
+import sys
+
+ALLOWED = {
+    "dnf-upgrade": ("/usr/bin/dnf5", "upgrade", "--refresh", "--assumeyes"),
+    "flatpak-system-upgrade": ("/usr/bin/flatpak", "update", "--system",
+                              "--noninteractive", "--assumeyes"),
+}
+
+def main():
+    if os.geteuid() != 0 or len(sys.argv) != 2:
+        raise SystemExit("Requires root and exactly one approved subcommand")
+    command = ALLOWED.get(sys.argv[1])
+    if not command:
+        raise SystemExit("Unsupported operation")
+    if command[0] == "/usr/bin/dnf5" and not os.path.isfile(command[0]):
+        command = ("/usr/bin/dnf", *command[1:])
+    if not os.path.isfile(command[0]):
+        raise SystemExit("Package manager unavailable")
+    environment = {"PATH": "/usr/sbin:/usr/bin", "LANG": "C.UTF-8",
+                   "LC_ALL": "C.UTF-8", "HOME": "/root"}
+    os.execve(command[0], command, environment)
+
+if __name__ == "__main__":
+    main()

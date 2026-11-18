@@ -15,9 +15,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import unquote, urlsplit, parse_qs
 
 if __package__:
-    from . import docker_manager
+    from . import docker_manager, package_manager
 else:
     import docker_manager
+    import package_manager
 
 import psutil
 
@@ -148,6 +149,17 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 return self.reply(500, {"error": "collector_error"})
         path = urlsplit(self.path)
+        if path.path == "/v1/packages":
+            refresh = parse_qs(path.query).get("refresh", ["false"])[0] == "true"
+            return self.reply(200, package_manager.inspect(refresh))
+        if path.path == "/v1/packages/jobs":
+            return self.reply(200, {"items": package_manager.last_jobs()})
+        package_job = re.fullmatch(r"/v1/packages/jobs/([a-f0-9]{32})", path.path)
+        if package_job:
+            try:
+                return self.reply(200, package_manager.upgrade_status(package_job.group(1)))
+            except LookupError:
+                return self.reply(404, {"error": "not_found"})
         if path.path == "/v1/docker/inventory":
             return self.reply(200, docker_manager.inventory(ALLOWED))
         if path.path == "/v1/docker/stats":
@@ -182,6 +194,24 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if not self.authorized():
             return self.reply(401, {"error": "unauthorized"})
+        pkg = re.fullmatch(r"/v1/packages/upgrade/(dnf|flatpak-user|flatpak-system)", self.path)
+        if pkg:
+            try:
+                size = int(self.headers.get("Content-Length", "0"))
+                if size < 0 or size > 512:
+                    return self.reply(413, {"error": "oversized_body"})
+                payload = json.loads(self.rfile.read(size) or b"{}")
+                phrase = payload.get("confirmation_text", "")
+                if not isinstance(phrase, str) or len(phrase) > 100:
+                    return self.reply(422, {"error": "invalid_confirmation"})
+                result = package_manager.start_upgrade(pkg.group(1), phrase)
+                return self.reply(202, result)
+            except PermissionError:
+                return self.reply(403, {"error": "requires_approved_helper_or_phrase"})
+            except RuntimeError:
+                return self.reply(409, {"error": "upgrade_already_running"})
+            except (ValueError, TypeError, AttributeError):
+                return self.reply(422, {"error": "invalid_request"})
         transaction = re.fullmatch(
             r"/v1/docker/execute/(container|project)/([^/]+)/(start|stop|restart)", self.path)
         if transaction:
@@ -206,23 +236,34 @@ class Handler(BaseHTTPRequestHandler):
         operation = re.fullmatch(r"/v1/docker/containers/([^/]+)/(start|stop|restart)", self.path)
         if operation:
             name, action = unquote(operation.group(1)), operation.group(2)
-            if docker_manager.critical_reason(name):
-                return self.reply(403, {"error": "use_confirmed_endpoint"})
             try:
-                result = docker_manager.control(name, action, ALLOWED)
+                plan = docker_manager.operation_plan("container", name, action, ALLOWED)
+                if plan["requires_confirmation"]:
+                    return self.reply(403, {"error": "use_confirmed_endpoint"})
+                result = docker_manager.execute_plan(plan, ALLOWED)
             except PermissionError:
                 return self.reply(403, {"error": "not_allowed"})
+            except (ValueError, LookupError):
+                return self.reply(422, {"error": "invalid_target"})
+            except RuntimeError:
+                return self.reply(503, {"error": "docker_unavailable"})
             return self.reply(200 if result["ok"] else 502, result)
         match = re.fullmatch(r"/v1/containers/([^/]+)/restart", self.path)
         if not match:
             return self.reply(404, {"error": "not_found"})
         name = unquote(match.group(1))
-        if not can_restart(name) or docker_manager.critical_reason(name):
-            return self.reply(403, {"error": "not_allowed_or_critical"})
-        rc, out, err = run("docker", "restart", "--time", "10", name, timeout=20)
-        if rc != 0:
-            return self.reply(502, {"error": "restart_failed", "detail": err[:160]})
-        return self.reply(200, {"ok": True, "container": name})
+        try:
+            plan = docker_manager.operation_plan("container", name, "restart", ALLOWED)
+            if plan["requires_confirmation"]:
+                return self.reply(403, {"error": "use_confirmed_endpoint"})
+            result = docker_manager.execute_plan(plan, ALLOWED)
+            return self.reply(200 if result["ok"] else 502, result)
+        except PermissionError:
+            return self.reply(403, {"error": "not_allowed"})
+        except (ValueError, LookupError):
+            return self.reply(422, {"error": "invalid_target"})
+        except RuntimeError:
+            return self.reply(503, {"error": "docker_unavailable"})
 
     def log_message(self, fmt, *args):
         # Logs omit request headers (including the shared secret).

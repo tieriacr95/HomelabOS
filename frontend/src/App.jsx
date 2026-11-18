@@ -1,16 +1,18 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Activity, AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Bell, Box, Check,
-  CheckCircle2, ChevronRight, CircleHelp, Clock3, Container, Cpu, Database,
+  CheckCircle2, ChevronRight, CircleHelp, Clock3, Container, Cpu, Database, Package,
   ExternalLink, Gauge, HardDrive, HeartPulse, LayoutDashboard, LockKeyhole,
   LogOut, Menu, Monitor, Network, RefreshCw, RotateCw, Server, Settings2,
   Shield, ShieldCheck, Terminal, Thermometer, Wifi, WifiOff, X, Zap
 } from 'lucide-react';
 import DockerManager from './DockerManager.jsx';
+import PackageManager from './PackageManager.jsx';
 
 const tabs = [
   { id: 'overview', name: 'Resumen', icon: LayoutDashboard },
   { id: 'fedora', name: 'Sistema Fedora', icon: Monitor },
+  { id: 'packages', name: 'Actualizaciones', icon: Package },
   { id: 'docker', name: 'Docker', icon: Container },
   { id: 'network', name: 'Red y servicios', icon: Network },
   { id: 'security', name: 'Seguridad', icon: ShieldCheck },
@@ -242,6 +244,7 @@ function App() {
           <Panel title="Detalles del equipo" icon={Thermometer}><div className="kv"><span>Hostname</span><strong>{host?.hostname || '—'}</strong></div><div className="kv"><span>Carga (1, 5, 15 min)</span><strong>{host?.cpu?.load?.map(n => fmt.format(n)).join(' · ') || '—'}</strong></div><div className="kv"><span>SELinux</span><strong>{host?.selinux || '—'}</strong></div><div className="kv"><span>Tráfico recibido</span><strong>{size(host?.network?.bytes_recv)}</strong></div>{host?.temperatures?.length ? host.temperatures.map((t,i) => <div className="kv" key={i}><span>{t.label}</span><strong>{t.celsius}°C</strong></div>) : <div className="small-note">Sensores de temperatura no disponibles en este equipo.</div>}</Panel></div>
         </>}
         {tab === 'docker' && <DockerManager request={api} csrf={auth.csrf}/>}
+        {tab === 'packages' && <PackageManager request={api} csrf={auth.csrf}/>}
         {tab === 'network' && <>
           <Title eyebrow="CONECTIVIDAD" title="Red y servicios" sub="Comprobaciones HTTP y estado de la conectividad del host."/>
           <div className="metrics three"><Metric icon={ArrowDownToLine} label="Datos recibidos" value={size(host?.network?.bytes_recv)} help="Acumulado desde arranque"/><Metric icon={ArrowUpFromLine} label="Datos enviados" value={size(host?.network?.bytes_sent)} help="Acumulado desde arranque" color="blue"/><Metric icon={Wifi} label="Servicios online" value={(data?.services || []).length ? onlineServices + '/' + data.services.length : '0'} help="Monitores habilitados" color="purple"/></div>
@@ -268,7 +271,7 @@ function App() {
           <Panel title="Conexiones" icon={Settings2}><div className="kv"><span>Interfaz web</span><strong>127.0.0.1:8091</strong></div><div className="kv"><span>Agente host</span><Pill positive={agentOnline}>{agentOnline ? 'Conectado' : 'Desconectado'}</Pill></div><div className="kv"><span>Monitores activos</span><strong>{data?.services?.length || 0}</strong></div><div className="kv"><span>Cuenta</span><strong>{auth.username}</strong></div></Panel>
           <Panel title="Próximos pasos" icon={Zap}><div className="settings-steps"><div><span>01</span><p><strong>Conecta el agente:</strong> ejecuta bash scripts/install.sh desde Fedora.</p></div><div><span>02</span><p><strong>Servicios:</strong> edita config/services.json para activar las verificaciones de Plex y tus aplicaciones.</p></div><div><span>03</span><p><strong>Reinicios:</strong> agrega nombres a HOMELAB_ALLOWED_CONTAINERS en .env y reinstala el agente.</p></div><div><span>04</span><p><strong>Acceso externo:</strong> configura Cloudflare Tunnel + Access antes de habilitar acceso desde Internet.</p></div></div></Panel>
         </>}
-        <footer className="footer"><span>HomeLab OS v0.2.0</span><span>Diseñado para Fedora Linux · Actualización automática cada 20 s</span></footer>
+        <footer className="footer"><span>HomeLab OS v0.3.0</span><span>Diseñado para Fedora Linux · Actualización automática cada 20 s</span></footer>
       </div>
     </main>
     {restart && <div className="modal-overlay" role="presentation" onClick={() => setRestart(null)}><div className="modal" role="dialog" aria-modal="true" aria-label="Confirmar reinicio" onClick={e => e.stopPropagation()}><div className="modal-icon"><RotateCw size={24}/></div><h3>¿Reiniciar contenedor?</h3><p>Se reiniciará <strong>{restart}</strong>. Esto puede interrumpir temporalmente el servicio.</p><div className="modal-buttons"><button className="btn secondary" onClick={() => setRestart(null)}>Cancelar</button><button className="btn primary" disabled={busy} onClick={doRestart}>Sí, reiniciar</button></div></div></div>}

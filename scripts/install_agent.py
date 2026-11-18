@@ -33,6 +33,20 @@ agent_env.write_text(
 )
 agent_env.chmod(0o600)
 
+# Relax sandbox only after optional root-owned helper + sudoers installation.
+helper = Path("/usr/local/libexec/homelabos/package-helper")
+sudoers = Path("/etc/sudoers.d/homelabos-packages")
+def root_owned_safe(path):
+    try:
+        st = path.stat()
+        return st.st_uid == 0 and not (st.st_mode & 0o022)
+    except OSError:
+        return False
+
+privileged_mode = root_owned_safe(helper) and root_owned_safe(sudoers)
+print("Package helper: " + ("enabled (reduced agent sandbox)" if privileged_mode
+                            else "disabled (read-only DNF)"))
+
 python = Path.home() / ".local/share/homelabos/venv/bin/python"
 agent = root / "agent/agent.py"
 unit_dir = Path.home() / ".config/systemd/user"
@@ -44,7 +58,9 @@ unit.write_text(
     "EnvironmentFile=" + shlex.quote(str(agent_env)) + "\n"
     "ExecStart=" + shlex.quote(str(python)) + " " + shlex.quote(str(agent)) + "\n"
     "Restart=on-failure\nRestartSec=5\n"
-    "NoNewPrivileges=true\nProtectSystem=strict\nProtectHome=read-only\n"
+    ("NoNewPrivileges=false\n" if privileged_mode else
+     "NoNewPrivileges=true\nProtectSystem=strict\nProtectHome=read-only\n"
+     "ReadWritePaths=-%h/.local/share/flatpak -%h/.cache\n")
     "PrivateTmp=true\nRestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX\n"
     "UMask=0077\n\n"
     "[Install]\nWantedBy=default.target\n"

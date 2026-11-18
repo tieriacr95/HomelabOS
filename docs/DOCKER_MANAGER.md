@@ -1,4 +1,4 @@
-# Docker Manager 2.0 — HomeLab OS v0.2
+# Docker Manager 2.1 — HomeLab OS v0.3
 
 La fase A incorpora un inventario de Docker y acciones supervisadas desde la interfaz web.
 
@@ -74,3 +74,11 @@ Abre http://localhost:8091 → Docker. Deberías ver tus contenedores reales, si
 - **Gestión limitada**: las operaciones afectan contenedores individuales. No intentan sustituir las reglas de dependencia de Compose ni administran todos los servicios de un stack a la vez.
 - **Política de reinicio**: si detienes un contenedor con una política de reinicio, Docker puede volver a iniciarlo según esa política. Revisa antes de usar la función.
 - **Logs y métricas**: el agente limita tiempos de ejecución, número de líneas y tamaño de las respuestas; no ofrece una terminal ni ejecución interactiva.
+
+## Controles por proyecto y protección crítica
+
+La sección **Proyectos Compose** incorpora acciones para iniciar, detener o reiniciar todos los contenedores existentes de un proyecto, si todos están autorizados individualmente en HOMELAB_ALLOWED_CONTAINERS. Se consulta un plan nuevo antes de cada operación. Los proyectos siempre requieren escribir una confirmación exacta.
+
+Los contenedores con nombres o imágenes que indican base de datos, túnel, proxy o panel de administración (por ejemplo PostgreSQL, cloudflared y homelabos) requieren confirmación escrita también para acciones individuales. La validación se repite en el agente; la API antigua no elude estas protecciones.
+
+La operación usa docker start/stop/restart por contenedor, con orden conservador (base de datos antes de API/web al iniciar, orden inverso al detener). **No sustituye el control de dependencias de Docker Compose** ni elimina recursos. Una operación puede completar parcialmente; revisa los resultados y logs.
