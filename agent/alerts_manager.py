@@ -292,7 +292,7 @@ def record_results(checks, config, now=None, sender=None):
                     VALUES(?,?,?,?,?,?,?,?,?)""",
                     (key,kind,subject,title,item.get("severity","warning"),
                      "pending" if status == "fail" else "healthy",
-                     1 if status == "fail" else 0,now,now))
+                     0,now,now))
                 previous = _one(db,key)
             failures = previous["failures"]+1 if status == "fail" else 0
             next_state = previous["state"]
