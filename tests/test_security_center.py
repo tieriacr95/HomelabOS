@@ -32,7 +32,7 @@ def test_firewall_zones_are_read_only_and_bounded(monkeypatch):
         if cmd[-1] == "--state":
             return 0, "running\n", ""
         if cmd[-1] == "--get-active-zones":
-            return 0, "public\n  interfaces: enp3s0\n  sources: 192.168.50.0/24\n", ""
+            return 0, "public (default)\n  interfaces: enp3s0\n  sources: 192.168.50.0/24\n", ""
         if cmd[-1] == "--list-services":
             return 0, "ssh mdns", ""
         if cmd[-1] == "--list-ports":
@@ -138,3 +138,12 @@ def test_snapshot_cache_reuse(monkeypatch):
     assert len(calls)==1
     sc.cached_report(refresh=True)
     assert len(calls)==2
+
+
+def test_firewall_query_failure_not_reported_as_inactive(monkeypatch):
+    monkeypatch.setattr(sc, "_service_active", lambda name: "active")
+    monkeypatch.setattr(sc.shutil, "which", lambda command: "/usr/bin/firewall-cmd")
+    monkeypatch.setattr(sc, "run", lambda *args, **kwargs: (1, "", "permission denied"))
+    value=sc.firewall_status()
+    assert value["state"]=="unknown"
+    assert value["error"] is not None
