@@ -251,12 +251,15 @@ export default function AlertsCenter({request,csrf}){
         <h4><MessageCircle size={17}/> Configuración Telegram</h4>
         <p>Configura tu bot de Telegram desde una terminal local. El comando solicita el token de forma oculta.</p>
         <pre>python3 scripts/alerts_setup.py --telegram</pre>
+        {snapshot?.telegram?.error&&<div className="al-note al-error">
+          <AlertTriangle size={16}/>{snapshot.telegram.error}
+        </div>}
         <button className="al-button" disabled={!snapshot?.telegram?.configured||saving}
           onClick={()=>action('telegram/test',{confirm:true},
               'Mensaje de prueba enviado a Telegram.')}>
           <MessageCircle size={15}/> Enviar mensaje de prueba
         </button>
-        <p className="al-small">Si desactivas Telegram, los incidentes continuarán registrándose localmente.</p>
+        <p className="al-small">Antes de probar, abre el chat del bot en Telegram y pulsa <strong>Iniciar</strong> o envía <code>/start</code>. Si cambiaste las credenciales, ejecuta <code>python3 scripts/alerts_setup.py --telegram --replace</code> y repite la prueba. Los incidentes continúan registrándose aunque Telegram esté desactivado.</p>
       </div>
       <div className="al-channel">
         <h4><Timer size={17}/> Programador de comprobaciones</h4>

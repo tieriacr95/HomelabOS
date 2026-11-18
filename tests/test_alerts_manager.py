@@ -170,3 +170,47 @@ def test_maintenance_timer_status_exposed_only_as_boolean(configured,monkeypatch
     assert result["timer"] is False
     assert result["maintenance_timer"] is True
     assert "bot_token" not in str(result)
+
+
+def test_telegram_error_codes_do_not_expose_bot_token(configured, monkeypatch):
+    from urllib.error import HTTPError
+    token = "123456789:" + "a" * 35
+    am._write_private(am.TELEGRAM, {"bot_token": token, "chat_id": "123456"})
+    def http_error(req, timeout):
+        raise HTTPError(req.full_url, 403, "Forbidden", {}, None)
+    monkeypatch.setattr(am.urllib.request, "urlopen", http_error)
+    with pytest.raises(am.AlertError) as exc:
+        am.test_telegram()
+    assert str(exc.value) == "telegram_chat_forbidden"
+    assert token not in str(exc.value)
+    assert token not in str(am.telegram_status())
+
+
+def test_telegram_invalid_token_returns_safe_code(configured, monkeypatch):
+    from urllib.error import HTTPError
+    token = "123456789:" + "b" * 35
+    am._write_private(am.TELEGRAM, {"bot_token": token, "chat_id": "123456"})
+    def bad_token(req, timeout):
+        raise HTTPError(req.full_url, 401, "Unauthorized", {}, None)
+    monkeypatch.setattr(am.urllib.request, "urlopen", bad_token)
+    with pytest.raises(am.AlertError, match="^telegram_invalid_token$"):
+        am.test_telegram()
+
+
+def test_telegram_network_failure_is_sanitized(configured, monkeypatch):
+    from urllib.error import URLError
+    token = "123456789:" + "b" * 35
+    am._write_private(am.TELEGRAM, {"bot_token": token, "chat_id": "123456"})
+    monkeypatch.setattr(am.urllib.request, "urlopen",
+                        lambda *args, **kwargs: (_ for _ in ()).throw(URLError("https://api.telegram.org/bot"+token)))
+    with pytest.raises(am.AlertError) as exc:
+        am.test_telegram()
+    assert str(exc.value) == "telegram_network_error"
+    assert token not in str(exc.value)
+
+
+def test_telegram_status_rejects_non_object_json(configured):
+    am._write_private(am.TELEGRAM, ["not", "credentials"])
+    result = am.telegram_status()
+    assert result["configured"] is False
+    assert "JSON" in result["error"]

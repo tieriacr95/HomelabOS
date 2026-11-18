@@ -81,3 +81,33 @@ def test_incident_action_restricted(session,monkeypatch):
                      json={"minutes":60})
     assert good.status_code==200
     assert sent[0]==("POST","/v1/alerts/incidents/15/silence",{"minutes":60})
+
+
+def test_telegram_failure_returns_safe_actionable_explanation(session,monkeypatch):
+    import httpx
+    client,csrf=session
+    request=httpx.Request("POST","http://127.0.0.1:18765/v1/alerts/telegram/test")
+    response=httpx.Response(409,request=request,json={"error":"telegram_chat_forbidden"})
+    async def relay(method,path,body=None,timeout=35):
+        raise httpx.HTTPStatusError("Rejected",request=request,response=response)
+    monkeypatch.setattr(main,"agent_request",relay)
+    result=client.post("/api/alerts/telegram/test",
+         headers={"X-CSRF-Token":csrf},json={"confirm":True})
+    assert result.status_code==409
+    assert "/start" in result.json()["detail"]
+
+
+def test_telegram_never_relays_unknown_error_messages(session,monkeypatch):
+    import httpx
+    client,csrf=session
+    secret="example-secret-do-not-leak"
+    request=httpx.Request("POST","http://127.0.0.1:18765/v1/alerts/telegram/test")
+    response=httpx.Response(409,request=request,json={"error":secret})
+    async def relay(method,path,body=None,timeout=35):
+        raise httpx.HTTPStatusError("Rejected",request=request,response=response)
+    monkeypatch.setattr(main,"agent_request",relay)
+    result=client.post("/api/alerts/telegram/test",
+         headers={"X-CSRF-Token":csrf},json={"confirm":True})
+    assert result.status_code==409
+    assert secret not in result.text
+    assert "Operación rechazada" in result.text

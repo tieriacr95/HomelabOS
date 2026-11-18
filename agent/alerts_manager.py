@@ -153,10 +153,12 @@ def set_rules(value):
 def telegram_status():
     try:
         obj = _read_private(TELEGRAM)
-    except (ValueError, AlertError):
-        return {"configured": False, "error": "Archivo Telegram inválido o inseguro"}
+    except (ValueError, AlertError, OSError, TypeError):
+        return {"configured": False, "error": "El archivo Telegram no se puede leer o tiene permisos inseguros"}
     if not obj:
         return {"configured": False, "error": None}
+    if not isinstance(obj, dict):
+        return {"configured": False, "error": "El archivo Telegram debe contener un objeto JSON"}
     token = obj.get("bot_token")
     chat = obj.get("chat_id")
     if not isinstance(token, str) or not re.fullmatch(r"[0-9]{5,15}:[A-Za-z0-9_-]{30,128}", token):
@@ -166,10 +168,27 @@ def telegram_status():
     return {"configured": True, "error": None}
 
 
+# Only stable, token-free error identifiers leave this module.
+TELEGRAM_FAILURES = {
+    400: "telegram_bad_request",
+    401: "telegram_invalid_token",
+    403: "telegram_chat_forbidden",
+    404: "telegram_invalid_token",
+    409: "telegram_conflict",
+    429: "telegram_rate_limited",
+}
+
+
 def _notify(text):
-    obj = _read_private(TELEGRAM)
-    if not obj or not telegram_status()["configured"]:
-        raise AlertError("Telegram not configured")
+    status = telegram_status()
+    if not status["configured"]:
+        raise AlertError("telegram_credentials_missing")
+    try:
+        obj = _read_private(TELEGRAM)
+    except (OSError, ValueError, TypeError, AlertError):
+        raise AlertError("telegram_credentials_unreadable")
+    if not isinstance(obj, dict):
+        raise AlertError("telegram_credentials_unreadable")
     token = obj["bot_token"]
     body = urllib.parse.urlencode({"chat_id": obj["chat_id"],
                                    "text": text[:3500],
@@ -182,16 +201,27 @@ def _notify(text):
         with urllib.request.urlopen(request, timeout=8) as response:
             result = json.loads(response.read(2000))
         if not isinstance(result, dict) or result.get("ok") is not True:
-            raise AlertError("Telegram refused message")
+            code = result.get("error_code") if isinstance(result, dict) else None
+            raise AlertError(TELEGRAM_FAILURES.get(code, "telegram_rejected"))
         return True
-    except (urllib.error.URLError, OSError, ValueError):
-        # NEVER surface urllib error strings: they may contain the bot token.
-        raise AlertError("Telegram delivery failed")
+    except urllib.error.HTTPError as exc:
+        # HTTPError is also URLError. Never log or propagate the URL because
+        # Telegram embeds the secret bot token in the request path.
+        raise AlertError(TELEGRAM_FAILURES.get(exc.code, "telegram_http_error")) from None
+    except urllib.error.URLError:
+        raise AlertError("telegram_network_error") from None
+    except (TimeoutError, ConnectionError, OSError):
+        raise AlertError("telegram_network_error") from None
+    except (ValueError, TypeError):
+        raise AlertError("telegram_invalid_response") from None
 
 
 def test_telegram():
-    if not telegram_status()["configured"]:
-        raise AlertError("Telegram credentials not configured")
+    state = telegram_status()
+    if not state["configured"]:
+        if state["error"]:
+            raise AlertError("telegram_credentials_invalid")
+        raise AlertError("telegram_credentials_missing")
     _notify("✅ HomeLab OS: prueba de notificaciones. Ninguna operación del sistema fue ejecutada.")
     return {"sent": True}
 

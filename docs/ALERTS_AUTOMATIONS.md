@@ -125,3 +125,20 @@ No es un sistema de métricas industriales ni un SIEM. El check HTTP utiliza la 
 Las notificaciones por Telegram requieren conectividad de salida a api.telegram.org. Los errores de entrega se registran sin mostrar detalles de URL que pudieran contener el token.
 
 **Fase E no incorpora backups previos a actualizaciones DNF ni remediación automática.**
+
+
+## Diagnóstico del mensaje de prueba de Telegram (v0.6.1)
+
+Tras actualizar, la interfaz muestra códigos explicados, en vez de la notificación genérica «Operación rechazada por el agente». Los códigos no incluyen ni registran el token ni la URL del bot.
+
+| Mensaje | Qué comprobar |
+|---|---|
+| Token rechazado 401/404 | Revisa el token con BotFather y ejecuta `python3 scripts/alerts_setup.py --telegram --replace` |
+| Solicitud rechazada 400 | Verifica que el chat ID sea el correcto y que hayas iniciado una conversación con el bot |
+| Chat denegado 403 | Abre el bot en Telegram y escribe `/start`, o agrégalo al grupo y revisa permisos |
+| Red o DNS | Comprueba que Fedora pueda conectarse a `https://api.telegram.org` sin un proxy bloqueante |
+| Credenciales inaccesibles | Comprueba dueño y permisos de `~/.config/homelabos/telegram.json` (0600) y reinicia el agente |
+
+Reinicia el agente al actualizar con `bash scripts/install.sh`. La comprobación solo envía un mensaje y no requiere habilitar el timer ni las reglas de monitoreo.
+
+No pegues el token real en chats, reportes ni logs de soporte.

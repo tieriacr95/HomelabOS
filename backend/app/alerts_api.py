@@ -6,6 +6,23 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 
+# Only controlled identifiers are translated. Never forward a raw agent error,
+# HTTP exception text or Telegram URL (which includes the secret bot token).
+SAFE_ERRORS = {
+    "telegram_credentials_missing": "Telegram no está configurado. Ejecuta python3 scripts/alerts_setup.py --telegram.",
+    "telegram_credentials_invalid": "El archivo de credenciales Telegram es inválido o tiene permisos inseguros.",
+    "telegram_credentials_unreadable": "El agente no puede leer las credenciales Telegram; verifica permisos y reinicia el servicio.",
+    "telegram_invalid_token": "Telegram rechazó el token del bot (401/404). Reconfigúralo en Fedora con --replace.",
+    "telegram_bad_request": "Telegram rechazó la solicitud (400). Revisa el ID del chat y abre una conversación con el bot antes de probar.",
+    "telegram_chat_forbidden": "Telegram denegó enviar al chat (403). Inicia el bot con /start o comprueba que esté agregado al grupo.",
+    "telegram_conflict": "Telegram notificó un conflicto (409). Revisa el estado del bot.",
+    "telegram_rate_limited": "Telegram limitó temporalmente los mensajes (429). Espera antes de repetir la prueba.",
+    "telegram_rejected": "Telegram rechazó el envío. Comprueba el bot y su chat.",
+    "telegram_http_error": "Telegram devolvió un error HTTP no reconocido.",
+    "telegram_network_error": "El agente Fedora no pudo conectar con api.telegram.org. Revisa DNS, conexión, proxy y TLS.",
+    "telegram_invalid_response": "Telegram respondió con contenido inesperado. Comprueba la conectividad.",
+}
+
 class RulesUpdate(BaseModel):
     rules: dict
 
@@ -28,8 +45,15 @@ def make_router(current_user, csrf_user, relay, store):
             return await relay(method,path,body=body,timeout=timeout)
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code in (403,404,409,413,422):
-                raise HTTPException(exc.response.status_code,
-                                    "Operación rechazada por el agente")
+                detail = "Operación rechazada por el agente"
+                if path == "/v1/alerts/telegram/test":
+                    try:
+                        error = exc.response.json().get("error")
+                        if isinstance(error, str):
+                            detail = SAFE_ERRORS.get(error, detail)
+                    except (ValueError, TypeError, AttributeError):
+                        pass
+                raise HTTPException(exc.response.status_code, detail)
             raise HTTPException(502,"No fue posible completar la operación")
         except (httpx.HTTPError,RuntimeError,ValueError):
             raise HTTPException(503,"Agente Fedora no disponible")

@@ -263,8 +263,20 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(422, {"error": "invalid_parameters"})
             except LookupError:
                 return self.reply(404, {"error": "incident_not_found"})
-            except alerts_manager.AlertError:
-                return self.reply(409, {"error": "alerts_unavailable_or_busy"})
+            except alerts_manager.AlertError as exc:
+                # Only explicit token-free status codes are exposed. The
+                # exception can never include Telegram request URLs or tokens.
+                allowed = {
+                    "telegram_credentials_missing", "telegram_credentials_invalid",
+                    "telegram_credentials_unreadable", "telegram_bad_request",
+                    "telegram_invalid_token", "telegram_chat_forbidden",
+                    "telegram_conflict", "telegram_rate_limited",
+                    "telegram_rejected", "telegram_http_error",
+                    "telegram_network_error", "telegram_invalid_response",
+                }
+                code = str(exc)
+                return self.reply(409, {"error": code if code in allowed else
+                                        "alerts_unavailable_or_busy"})
         backup = re.fullmatch(r"/v1/backup/(backup|verify|restore)", self.path)
         if backup:
             try:
