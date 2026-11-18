@@ -47,7 +47,7 @@ systemctl --user restart homelabos-agent.service
 
 docker compose up -d --build
 echo
-echo "HomeLab OS installed: http://localhost:8090"
+echo "HomeLab OS installed: http://localhost:8091"
 echo "First login: create an admin account with the token from:"
 echo "  grep '^HOMELAB_SETUP_TOKEN=' .env"
 echo "Agent status: systemctl --user status homelabos-agent"
