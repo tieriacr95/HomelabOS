@@ -526,7 +526,7 @@ def _backup_checks(config):
     records=details.get("jobs",[])
     last_success=next((j for j in records
                        if j.get("operation")=="backup" and j.get("state")=="success"),None)
-    last_failed=next((j for j in records[::-1]
+    last_failed=next((j for j in records
                       if j.get("operation")=="backup" and j.get("state")=="failed"),None)
     results=[]
     if last_success:
@@ -543,6 +543,12 @@ def _backup_checks(config):
                               "La última tarea de backup falló","fail","critical"))
     else:
         results.append(_check("backup","failure","Último backup sin fallos nuevos","ok"))
+    verify_last=next((j for j in records if j.get("operation")=="verify"
+                      and j.get("state") in ("success","failed")),None)
+    if verify_last:
+        results.append(_check("backup","verification",
+            "Última verificación de backups: "+verify_last["state"],
+            "fail" if verify_last["state"]=="failed" else "ok","critical"))
     return results
 
 
@@ -591,15 +597,16 @@ def summary():
         checks=[dict(r) for r in db.execute(
             "SELECT * FROM checks ORDER BY key LIMIT 200")]
     scheduled=_timer_active()
+    maintenance=_timer_active("homelabos-maintenance.timer")
     return {"rules":config,"telegram":telegram_status(),"timer":scheduled,
-            "incidents":incident,"events":recent,"checks":checks,
+            "maintenance_timer":maintenance,"incidents":incident,"events":recent,"checks":checks,
             "last_run":dict(latest) if latest else None}
 
 
-def _timer_active():
+def _timer_active(name="homelabos-alerts.timer"):
     try:
         proc=subprocess.run(["systemctl","--user","is-enabled",
-                             "homelabos-alerts.timer"],capture_output=True,timeout=3)
+                             name],capture_output=True,timeout=3)
         return proc.returncode==0
     except (OSError,subprocess.TimeoutExpired):
         return False
