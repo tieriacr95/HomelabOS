@@ -6,6 +6,7 @@ import {
   LogOut, Menu, Monitor, Network, RefreshCw, RotateCw, Server, Settings2,
   Shield, ShieldCheck, Terminal, Thermometer, Wifi, WifiOff, X, Zap
 } from 'lucide-react';
+import DockerManager from './DockerManager.jsx';
 
 const tabs = [
   { id: 'overview', name: 'Resumen', icon: LayoutDashboard },
@@ -240,12 +241,7 @@ function App() {
           <div className="split equal"><Panel title="Procesos por consumo de RAM" icon={Activity}>{host?.processes?.length ? <div className="item-list">{host.processes.map(p => <div className="item-row" key={p.pid}><div className="item-icon muted"><Terminal size={17}/></div><div className="item-text"><strong>{p.name || 'Proceso'}</strong><span>PID {p.pid} · {p.user}</span></div><span className="mono">{size(p.rss)}</span></div>)}</div> : <Empty title="Sin datos de procesos" detail="El agente recopila los principales procesos."/>}</Panel>
           <Panel title="Detalles del equipo" icon={Thermometer}><div className="kv"><span>Hostname</span><strong>{host?.hostname || '—'}</strong></div><div className="kv"><span>Carga (1, 5, 15 min)</span><strong>{host?.cpu?.load?.map(n => fmt.format(n)).join(' · ') || '—'}</strong></div><div className="kv"><span>SELinux</span><strong>{host?.selinux || '—'}</strong></div><div className="kv"><span>Tráfico recibido</span><strong>{size(host?.network?.bytes_recv)}</strong></div>{host?.temperatures?.length ? host.temperatures.map((t,i) => <div className="kv" key={i}><span>{t.label}</span><strong>{t.celsius}°C</strong></div>) : <div className="small-note">Sensores de temperatura no disponibles en este equipo.</div>}</Panel></div>
         </>}
-        {tab === 'docker' && <>
-          <Title eyebrow="INFRAESTRUCTURA" title="Docker y contenedores" sub="Inspecciona imágenes, estado y disponibilidad. Los reinicios requieren autorización previa." aside={<Pill positive={!host?.docker_error && agentOnline}>{host?.docker_error || (running + ' activos')}</Pill>}/>
-          <div className="metrics three"><Metric icon={Container} label="Total" value={agentOnline && !host?.docker_error ? containers.length : '—'} help="Contenedores detectados"/><Metric icon={CheckCircle2} label="En ejecución" value={agentOnline && !host?.docker_error ? running : '—'} help="Estado running" color="blue"/><Metric icon={AlertTriangle} label="Detenidos" value={agentOnline && !host?.docker_error ? containers.length-running : '—'} help="Revisar servicios inactivos" color="amber"/></div>
-          <Panel title="Inventario de contenedores" icon={Container}>{containers.length ? <ContainerRows items={containers} onRestart={setRestart}/> : <Empty icon={Container} title="Docker no disponible o sin contenedores" detail={host?.docker_error || 'El agente detectará los contenedores cuando Docker esté accesible.'}/>}</Panel>
-          <div className="hint"><Shield size={17}/> Solo puedes reiniciar contenedores cuyos nombres estén en HOMELAB_ALLOWED_CONTAINERS. El panel no recibe acceso al socket de Docker.</div>
-        </>}
+        {tab === 'docker' && <DockerManager request={api} csrf={auth.csrf}/>}
         {tab === 'network' && <>
           <Title eyebrow="CONECTIVIDAD" title="Red y servicios" sub="Comprobaciones HTTP y estado de la conectividad del host."/>
           <div className="metrics three"><Metric icon={ArrowDownToLine} label="Datos recibidos" value={size(host?.network?.bytes_recv)} help="Acumulado desde arranque"/><Metric icon={ArrowUpFromLine} label="Datos enviados" value={size(host?.network?.bytes_sent)} help="Acumulado desde arranque" color="blue"/><Metric icon={Wifi} label="Servicios online" value={(data?.services || []).length ? onlineServices + '/' + data.services.length : '0'} help="Monitores habilitados" color="purple"/></div>
@@ -272,7 +268,7 @@ function App() {
           <Panel title="Conexiones" icon={Settings2}><div className="kv"><span>Interfaz web</span><strong>127.0.0.1:8091</strong></div><div className="kv"><span>Agente host</span><Pill positive={agentOnline}>{agentOnline ? 'Conectado' : 'Desconectado'}</Pill></div><div className="kv"><span>Monitores activos</span><strong>{data?.services?.length || 0}</strong></div><div className="kv"><span>Cuenta</span><strong>{auth.username}</strong></div></Panel>
           <Panel title="Próximos pasos" icon={Zap}><div className="settings-steps"><div><span>01</span><p><strong>Conecta el agente:</strong> ejecuta bash scripts/install.sh desde Fedora.</p></div><div><span>02</span><p><strong>Servicios:</strong> edita config/services.json para activar las verificaciones de Plex y tus aplicaciones.</p></div><div><span>03</span><p><strong>Reinicios:</strong> agrega nombres a HOMELAB_ALLOWED_CONTAINERS en .env y reinstala el agente.</p></div><div><span>04</span><p><strong>Acceso externo:</strong> configura Cloudflare Tunnel + Access antes de habilitar acceso desde Internet.</p></div></div></Panel>
         </>}
-        <footer className="footer"><span>HomeLab OS v0.1.0</span><span>Diseñado para Fedora Linux · Actualización automática cada 20 s</span></footer>
+        <footer className="footer"><span>HomeLab OS v0.2.0</span><span>Diseñado para Fedora Linux · Actualización automática cada 20 s</span></footer>
       </div>
     </main>
     {restart && <div className="modal-overlay" role="presentation" onClick={() => setRestart(null)}><div className="modal" role="dialog" aria-modal="true" aria-label="Confirmar reinicio" onClick={e => e.stopPropagation()}><div className="modal-icon"><RotateCw size={24}/></div><h3>¿Reiniciar contenedor?</h3><p>Se reiniciará <strong>{restart}</strong>. Esto puede interrumpir temporalmente el servicio.</p><div className="modal-buttons"><button className="btn secondary" onClick={() => setRestart(null)}>Cancelar</button><button className="btn primary" disabled={busy} onClick={doRestart}>Sí, reiniciar</button></div></div></div>}

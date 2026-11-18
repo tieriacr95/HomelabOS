@@ -12,7 +12,12 @@ import socket
 import subprocess
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import unquote
+from urllib.parse import unquote, urlsplit, parse_qs
+
+if __package__:
+    from . import docker_manager
+else:
+    import docker_manager
 
 import psutil
 
@@ -142,11 +147,35 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(200, host_snapshot())
             except Exception:
                 return self.reply(500, {"error": "collector_error"})
+        path = urlsplit(self.path)
+        if path.path == "/v1/docker/inventory":
+            return self.reply(200, docker_manager.inventory(ALLOWED))
+        if path.path == "/v1/docker/stats":
+            return self.reply(200, docker_manager.stats())
+        match = re.fullmatch(r"/v1/docker/containers/([^/]+)/logs", path.path)
+        if match:
+            name = unquote(match.group(1))
+            query = parse_qs(path.query)
+            try:
+                tail = int(query.get("tail", ["200"])[0])
+                since = query.get("since", ["30m"])[0]
+                result = docker_manager.logs(name, tail, since)
+            except (ValueError, TypeError):
+                return self.reply(422, {"error": "invalid_log_request"})
+            return self.reply(502 if "error" in result else 200, result)
         return self.reply(404, {"error": "not_found"})
 
     def do_POST(self):
         if not self.authorized():
             return self.reply(401, {"error": "unauthorized"})
+        operation = re.fullmatch(r"/v1/docker/containers/([^/]+)/(start|stop|restart)", self.path)
+        if operation:
+            name, action = unquote(operation.group(1)), operation.group(2)
+            try:
+                result = docker_manager.control(name, action, ALLOWED)
+            except PermissionError:
+                return self.reply(403, {"error": "not_allowed"})
+            return self.reply(200 if result["ok"] else 502, result)
         match = re.fullmatch(r"/v1/containers/([^/]+)/restart", self.path)
         if not match:
             return self.reply(404, {"error": "not_found"})

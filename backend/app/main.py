@@ -19,6 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import store
+from .docker_api import make_router
 
 AGENT = os.getenv("HOMELAB_AGENT_URL", "http://127.0.0.1:18765").rstrip("/")
 AGENT_TOKEN = os.getenv("HOMELAB_AGENT_TOKEN", "")
@@ -97,7 +98,7 @@ def establish_session(response: Response, username: str):
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "version": "0.1.0"}
+    return {"status": "ok", "version": "0.2.0"}
 
 
 @app.get("/api/auth/status")
@@ -153,10 +154,10 @@ def logout(request: Request, response: Response, user=Depends(csrf_user)):
     return {"ok": True}
 
 
-async def agent_request(method: str, path: str):
+async def agent_request(method: str, path: str, timeout: float = 9.0):
     if not AGENT_TOKEN:
         raise RuntimeError("El token del agente no está configurado")
-    async with httpx.AsyncClient(timeout=httpx.Timeout(9.0, connect=2.0)) as client:
+    async with httpx.AsyncClient(timeout=httpx.Timeout(timeout, connect=2.0)) as client:
         response = await client.request(
             method, AGENT + path, headers={"Authorization": "Bearer " + AGENT_TOKEN})
     response.raise_for_status()
@@ -252,6 +253,9 @@ async def restart_container(name: str, body: ConfirmBody, user=Depends(csrf_user
         raise HTTPException(503, "Agente no disponible")
     store.log(user["username"], "restart", name, "ok")
     return result
+
+
+app.include_router(make_router(current_user, csrf_user, lambda *args, **kwargs: agent_request(*args, **kwargs), store))
 
 
 if (FRONTEND / "assets").exists():

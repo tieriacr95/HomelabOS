@@ -8,7 +8,7 @@ Aplicación web oscura y responsive, accesible en **http://localhost:8091**. Tu 
 
 - **Vista general**: CPU, RAM, disco, contenedores, alertas e historial de uso.
 - **Fedora**: procesos por RAM, sensores disponibles, uptime, tráfico de red, particiones y estado de servicios systemd.
-- **Docker**: inventario de contenedores e imágenes, estados y reinicio por lista blanca con confirmación.
+- **Docker Manager 2.0**: inventario de contenedores, imágenes, redes, volúmenes y proyectos Compose; CPU/RAM, logs y acciones iniciar/detener/reiniciar con autorización explícita.
 - **Servicios**: comprobaciones HTTP de endpoints que tú configures y alertas de disponibilidad.
 - **Seguridad**: indicadores de SELinux, firewalld y SSH; sesiones HttpOnly, CSRF, cabeceras de seguridad y auditoría.
 - **Histórico**: SQLite persistente, muestras de rendimiento y registro de acciones.
@@ -30,7 +30,7 @@ grep '^HOMELAB_SETUP_TOKEN=' .env
 
 **Requisitos:** Fedora Linux, Python 3 + venv, Docker Engine, Docker Compose v2, systemd --user y acceso de tu usuario a Docker. El instalador se ejecuta **sin sudo** y no sobrescribe los tokens existentes.
 
-Consulta **[Guía completa de instalación](docs/INSTALL.md)**, que incluye monitoreo de Plex, Personal Planner, Cloudflare Tunnel, restauración y solución de problemas.
+Consulta **[Guía completa de instalación](docs/INSTALL.md)** y **[Docker Manager 2.0](docs/DOCKER_MANAGER.md)** para la administración de contenedores, monitores, permisos y solución de problemas.
 
 ## Arquitectura
 
@@ -68,7 +68,7 @@ CI en GitHub Actions: pruebas del backend/agente, compilación frontend y build 
 
 - [x] Base segura, interfaz responsive y puerto 8091
 - [x] Monitor Fedora, Docker, red, servicios y alertas
-- [x] Reinicios restringidos de contenedores
+- [x] **Fase A — Docker Manager 2.0**: contenedores, Compose, imágenes, volúmenes, redes, métricas, logs y acciones seguras
 - [x] Historial SQLite, auditoría y respaldo cifrado manual
 - [ ] Administración de actualizaciones DNF/Flatpak
 - [ ] Automatizaciones y notificaciones programadas

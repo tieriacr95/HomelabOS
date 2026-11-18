@@ -59,9 +59,13 @@ Edita config/services.json:
 
 No des por supuesto que los puertos del ejemplo coinciden con los de tus aplicaciones. Los cambios en config/services.json se cargan en cada lectura del dashboard y no requieren reconstruir contenedores.
 
-## Reinicios de contenedores
+## Docker Manager 2.0 — Fase A
 
-Predeterminado: **ningún contenedor puede reiniciarse desde el panel**. Para habilitar algunos, edita .env:
+El panel Docker incluye inventario, proyectos Compose, imágenes, redes y volúmenes, estadísticas por contenedor y logs actualizados cada 5 segundos. También permite iniciar, detener y reiniciar contenedores autorizados. Consulta [Docker Manager 2.0](DOCKER_MANAGER.md) para detalles y controles de seguridad.
+
+## Reinicios, inicio y detención de contenedores
+
+Predeterminado: **ningún contenedor puede iniciarse, detenerse ni reiniciarse desde el panel**. Para habilitar algunos, edita .env:
 
 ~~~dotenv
 HOMELAB_ALLOWED_CONTAINERS=plex,homepage
@@ -117,6 +121,6 @@ El script realiza una copia coherente de SQLite antes de enviarla cifrada a rest
 
 ## Alcance de esta versión
 
-Implementado: autenticación inicial y login, panel responsive, métricas Fedora, temperaturas disponibles, disco, procesos, servicios systemd, listado Docker, reinicios opt-in, comprobaciones HTTP, alertas por umbral, historial SQLite y auditoría básica, backup cifrado manual y pruebas CI.
+Implementado: autenticación inicial y login, panel responsive, métricas Fedora, temperaturas disponibles, disco, procesos, servicios systemd, Docker Manager 2.0 (contenedores, imágenes, redes, volúmenes, proyectos Compose, métricas, logs y acciones opt-in), comprobaciones HTTP, alertas por umbral, historial SQLite y auditoría básica, backup cifrado manual y pruebas CI.
 
 Pendiente para futuras versiones: actualizaciones DNF/Flatpak con autorización, tareas automáticas, análisis avanzado de seguridad, restauración asistida, asistente IA y administración multi-host.
