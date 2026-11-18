@@ -1,5 +1,5 @@
 # Linux/Fedora-only host networking: connects to an agent restricted to 127.0.0.1.
-# The browser and Cloudflare Tunnel access http://127.0.0.1:8090.
+# The browser and Cloudflare Tunnel access http://127.0.0.1:8091.
 services:
   homelabos:
     build: .
@@ -25,7 +25,7 @@ services:
       - ALL
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/api/health', timeout=3)"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8091/api/health', timeout=3)"]
       interval: 30s
       timeout: 5s
       retries: 3
