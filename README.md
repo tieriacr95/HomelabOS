@@ -2,7 +2,7 @@
 
 **Centro local de administración Fedora + Docker + servicios HomeLab.**
 
-Aplicación web oscura y responsive, accesible en **http://localhost:8090**. Tu computadora Fedora aporta métricas reales mediante un agente systemd de usuario. El contenedor web no necesita root ni acceso directo al socket Docker.
+Aplicación web oscura y responsive, accesible en **http://localhost:8091**. Tu computadora Fedora aporta métricas reales mediante un agente systemd de usuario. El contenedor web no necesita root ni acceso directo al socket Docker.
 
 ## Funciones incluidas
 
@@ -22,7 +22,7 @@ cd HomelabOS
 bash scripts/install.sh
 ~~~
 
-Abre **http://localhost:8090** y crea tu cuenta. El instalador genera un token aleatorio:
+Abre **http://localhost:8091** y crea tu cuenta. El instalador genera un token aleatorio:
 
 ~~~bash
 grep '^HOMELAB_SETUP_TOKEN=' .env
@@ -35,7 +35,7 @@ Consulta **[Guía completa de instalación](docs/INSTALL.md)**, que incluye moni
 ## Arquitectura
 
 ~~~text
-Navegador (http://localhost:8090)
+Navegador (http://localhost:8091)
                |
        API FastAPI + React
        Contenedor Docker sin root
@@ -66,7 +66,7 @@ CI en GitHub Actions: pruebas del backend/agente, compilación frontend y build 
 
 ## Roadmap
 
-- [x] Base segura, interfaz responsive y puerto 8090
+- [x] Base segura, interfaz responsive y puerto 8091
 - [x] Monitor Fedora, Docker, red, servicios y alertas
 - [x] Reinicios restringidos de contenedores
 - [x] Historial SQLite, auditoría y respaldo cifrado manual
