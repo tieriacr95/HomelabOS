@@ -11,7 +11,7 @@ Aplicación web oscura y responsive, accesible en **http://localhost:8091**. Tu 
 - **Docker Manager 2.1**: inventario, métricas, logs y acciones por contenedor o por proyecto Compose; confirmación escrita para proyectos y servicios críticos.
 - **Fedora Package Manager**: consulta DNF/RPM y Flatpak (usuario/sistema), historial y actualización manual mediante helper privilegiado opcional y confirmación escrita.
 - **Servicios**: comprobaciones HTTP de endpoints que tú configures y alertas de disponibilidad.
-- **Seguridad**: indicadores de SELinux, firewalld y SSH; sesiones HttpOnly, CSRF, cabeceras de seguridad y auditoría.
+- **Security Center v0.4**: SELinux, firewalld, configuración efectiva SSH, sockets TCP/UDP, eventos de autenticación agregados, parámetros del kernel, hallazgos e historial; sin cambios automáticos. Sesiones HttpOnly, CSRF y auditoría.
 - **Histórico**: SQLite persistente, muestras de rendimiento y registro de acciones.
 - **Respaldo**: script de copia consistente de SQLite con cifrado restic opcional.
 
@@ -31,7 +31,7 @@ grep '^HOMELAB_SETUP_TOKEN=' .env
 
 **Requisitos:** Fedora Linux, Python 3 + venv, Docker Engine, Docker Compose v2, systemd --user y acceso de tu usuario a Docker. El instalador se ejecuta **sin sudo** y no sobrescribe los tokens existentes.
 
-Consulta **[Guía completa de instalación](docs/INSTALL.md)**, **[Docker Manager](docs/DOCKER_MANAGER.md)** y **[Package Manager](docs/PACKAGE_MANAGER.md)** para permisos y operación segura.
+Consulta **[Guía completa de instalación](docs/INSTALL.md)**, **[Docker Manager](docs/DOCKER_MANAGER.md)** y **[Package Manager](docs/PACKAGE_MANAGER.md)** y **[Security Center](docs/SECURITY_CENTER.md)** para permisos y operación segura.
 
 ## Arquitectura
 
@@ -72,6 +72,7 @@ CI en GitHub Actions: pruebas del backend/agente, compilación frontend y build 
 - [x] **Fase A — Docker Manager 2.1**: contenedores, Compose, imágenes, volúmenes, redes, métricas, logs y acciones seguras; control por proyecto y protección de servicios críticos
 - [x] Historial SQLite, auditoría y respaldo cifrado manual
 - [x] **Fase B — Fedora Package Manager**: DNF, Flatpak, paquetes instalados, pendientes, historial y ejecución bajo aprobación
+- [x] **Fase C — Security Center**: auditoría de solo lectura, recomendaciones, cobertura e historial
 - [ ] Automatizaciones y notificaciones programadas
 - [ ] Restauración guiada y auditoría de seguridad avanzada
 - [ ] Diagnóstico asistido por IA

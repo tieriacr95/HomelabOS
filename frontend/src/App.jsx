@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import DockerManager from './DockerManager.jsx';
 import PackageManager from './PackageManager.jsx';
+import SecurityCenter from './SecurityCenter.jsx';
 
 const tabs = [
   { id: 'overview', name: 'Resumen', icon: LayoutDashboard },
@@ -251,17 +252,7 @@ function App() {
           <Panel title="Endpoints monitoreados" icon={HeartPulse}>{(data?.services || []).length ? data.services.map(s => <div className="service-row" key={s.name}><div className="service-detail"><strong>{s.name}</strong><small>{s.url}</small></div><div className="service-actions"><span>{s.latency_ms == null ? '—' : s.latency_ms + ' ms'}</span><Pill positive={s.online}>{s.online ? 'Disponible' : 'Sin respuesta'}</Pill></div></div>) : <Empty icon={WifiOff} title="Todavía no hay verificaciones activas" detail="Edita config/services.json y establece enabled: true para los servicios que tengas desplegados."/>}</Panel>
           <div className="hint"><Network size={17}/> Las verificaciones se ejecutan localmente. Activa únicamente URLs que tú controles.</div>
         </>}
-        {tab === 'security' && <>
-          <Title eyebrow="PROTECCIÓN" title="Seguridad del host" sub="Indicadores básicos de endurecimiento. No sustituyen una auditoría de vulnerabilidades."/>
-          <div className="metrics three"><Metric icon={ShieldCheck} label="SELinux" value={host?.selinux || '—'} help="Modo de seguridad del sistema"/><Metric icon={Shield} label="firewalld" value={host?.services?.firewalld || '—'} help="Estado del firewall" color="blue"/><Metric icon={LockKeyhole} label="SSHD" value={host?.services?.sshd || '—'} help="Servicio de acceso remoto" color="purple"/></div>
-          <Panel title="Controles de HomeLab OS" icon={ShieldCheck}><div className="security-list">
-            <div><CheckCircle2 size={18}/><span><strong>Acceso web limitado a localhost</strong><small>El servidor escucha 127.0.0.1:8091 usando la red del host.</small></span></div>
-            <div><CheckCircle2 size={18}/><span><strong>Sesiones HTTP-only y protección CSRF</strong><small>Las operaciones de cambio requieren sesión y token CSRF.</small></span></div>
-            <div><CheckCircle2 size={18}/><span><strong>Agente no privilegiado</strong><small>Sin shell remoto ni permisos root predeterminados.</small></span></div>
-            <div><CheckCircle2 size={18}/><span><strong>Acciones Docker con lista permitida</strong><small>Los reinicios son opt-in y quedan registrados en la auditoría.</small></span></div>
-          </div></Panel>
-          <div className="hint"><AlertTriangle size={17}/> Para publicar la aplicación fuera de casa, usa Cloudflare Access y HTTPS. Configura HOMELAB_COOKIE_SECURE=true en el servidor web.</div>
-        </>}
+        {tab === 'security' && <SecurityCenter request={api}/>}
         {tab === 'audit' && <>
           <Title eyebrow="AUDITORÍA" title="Registro de actividad" sub="Acciones de acceso y administración realizadas desde HomeLab OS." aside={<button className="btn secondary" onClick={() => api('/api/audit').then(r=>setAudit(r.items||[]))}><RefreshCw size={16}/> Actualizar</button>}/>
           <Panel title="Eventos recientes" icon={Clock3}>{audit.length ? <div className="item-list">{audit.map(a => <div className="item-row" key={a.id}><div className="item-icon good"><Activity size={17}/></div><div className="item-text"><strong>{a.action} · {a.target}</strong><span>{a.actor} · {time(a.timestamp)}</span></div><Pill positive={a.result === 'ok'}>{a.result}</Pill></div>)}</div> : <Empty icon={Clock3} title="Sin eventos" detail="Los inicios de sesión y reinicios de contenedores se registran aquí."/>}</Panel>
@@ -271,7 +262,7 @@ function App() {
           <Panel title="Conexiones" icon={Settings2}><div className="kv"><span>Interfaz web</span><strong>127.0.0.1:8091</strong></div><div className="kv"><span>Agente host</span><Pill positive={agentOnline}>{agentOnline ? 'Conectado' : 'Desconectado'}</Pill></div><div className="kv"><span>Monitores activos</span><strong>{data?.services?.length || 0}</strong></div><div className="kv"><span>Cuenta</span><strong>{auth.username}</strong></div></Panel>
           <Panel title="Próximos pasos" icon={Zap}><div className="settings-steps"><div><span>01</span><p><strong>Conecta el agente:</strong> ejecuta bash scripts/install.sh desde Fedora.</p></div><div><span>02</span><p><strong>Servicios:</strong> edita config/services.json para activar las verificaciones de Plex y tus aplicaciones.</p></div><div><span>03</span><p><strong>Reinicios:</strong> agrega nombres a HOMELAB_ALLOWED_CONTAINERS en .env y reinstala el agente.</p></div><div><span>04</span><p><strong>Acceso externo:</strong> configura Cloudflare Tunnel + Access antes de habilitar acceso desde Internet.</p></div></div></Panel>
         </>}
-        <footer className="footer"><span>HomeLab OS v0.3.0</span><span>Diseñado para Fedora Linux · Actualización automática cada 20 s</span></footer>
+        <footer className="footer"><span>HomeLab OS v0.4.0</span><span>Diseñado para Fedora Linux · Actualización automática cada 20 s</span></footer>
       </div>
     </main>
     {restart && <div className="modal-overlay" role="presentation" onClick={() => setRestart(null)}><div className="modal" role="dialog" aria-modal="true" aria-label="Confirmar reinicio" onClick={e => e.stopPropagation()}><div className="modal-icon"><RotateCw size={24}/></div><h3>¿Reiniciar contenedor?</h3><p>Se reiniciará <strong>{restart}</strong>. Esto puede interrumpir temporalmente el servicio.</p><div className="modal-buttons"><button className="btn secondary" onClick={() => setRestart(null)}>Cancelar</button><button className="btn primary" disabled={busy} onClick={doRestart}>Sí, reiniciar</button></div></div></div>}

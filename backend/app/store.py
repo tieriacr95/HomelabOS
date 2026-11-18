@@ -50,6 +50,20 @@ def initialize():
           target TEXT NOT NULL,
           result TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS security_scans (
+          id INTEGER PRIMARY KEY,
+          timestamp INTEGER NOT NULL,
+          critical INTEGER NOT NULL,
+          high INTEGER NOT NULL,
+          medium INTEGER NOT NULL,
+          info INTEGER NOT NULL,
+          non_loopback INTEGER,
+          checks_available INTEGER NOT NULL,
+          ssh_failed INTEGER,
+          selinux TEXT NOT NULL,
+          firewall TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_security_scans_time ON security_scans(timestamp);
         """)
 
 
@@ -138,3 +152,36 @@ def recent_audit():
     with connect() as db:
         return [dict(r) for r in db.execute(
             "SELECT timestamp,actor,action,target,result FROM audit ORDER BY id DESC LIMIT 50").fetchall()]
+
+
+def record_security_scan(report):
+    """Store aggregated findings only; never persist port/process/user or journal details."""
+    now = int(time.time())
+    summary = report.get("summary", {})
+    with connect() as db:
+        last = db.execute("SELECT timestamp FROM security_scans ORDER BY id DESC LIMIT 1").fetchone()
+        if last is not None and now - last[0] < 600:
+            return False
+        db.execute("""
+            INSERT INTO security_scans(
+              timestamp,critical,high,medium,info,non_loopback,
+              checks_available,ssh_failed,selinux,firewall
+            ) VALUES (?,?,?,?,?,?,?,?,?,?)
+        """, (now, int(summary.get("critical", 0)), int(summary.get("high", 0)),
+              int(summary.get("medium", 0)), int(summary.get("info", 0)),
+              summary.get("visible_ports"), int(summary.get("checks_available", 0)),
+              report.get("authentication", {}).get("ssh_failed"),
+              str(report.get("selinux", {}).get("mode", "unknown"))[:40],
+              str(report.get("firewall", {}).get("state", "unknown"))[:40]))
+        db.execute("DELETE FROM security_scans WHERE timestamp<?", (now - 30 * 86400,))
+    return True
+
+
+def security_history(days=7):
+    since = int(time.time()) - days * 86400
+    with connect() as db:
+        return [dict(row) for row in db.execute("""
+            SELECT timestamp,critical,high,medium,info,non_loopback,
+                   checks_available,ssh_failed,selinux,firewall
+            FROM security_scans WHERE timestamp>=? ORDER BY timestamp DESC LIMIT 150
+        """, (since,)).fetchall()]

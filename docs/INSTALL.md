@@ -100,6 +100,10 @@ bash scripts/install_package_helper.sh
 
 Esto configura dos comandos exactos en sudoers y vuelve a registrar el servicio del agente con un aislamiento de systemd menos restrictivo; consulta [documentación y riesgos](PACKAGE_MANAGER.md).
 
+## Security Center v0.4
+
+Abre la sección **Seguridad** para inspeccionar SELinux, firewalld, SSH, puertos abiertos, eventos de autenticación y hardening del kernel. El agente no necesita permisos root; cualquier fuente inaccesible se señala como no disponible. Consulta [Security Center](SECURITY_CENTER.md) para el alcance y los límites.
+
 ## Acceso remoto
 
 El despliegue está diseñado para **localhost** por defecto. No publiques directamente el puerto sin autenticación adicional. Si usas Cloudflare Tunnel, protege la ruta con Cloudflare Access y HTTPS.

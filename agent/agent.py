@@ -15,10 +15,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import unquote, urlsplit, parse_qs
 
 if __package__:
-    from . import docker_manager, package_manager
+    from . import docker_manager, package_manager, security_center
 else:
     import docker_manager
     import package_manager
+    import security_center
 
 import psutil
 
@@ -149,6 +150,12 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 return self.reply(500, {"error": "collector_error"})
         path = urlsplit(self.path)
+        if path.path == "/v1/security/report":
+            try:
+                refresh = parse_qs(path.query).get("refresh", ["false"])[0] == "true"
+                return self.reply(200, security_center.cached_report(refresh))
+            except Exception:
+                return self.reply(500, {"error": "security_collector_failed"})
         if path.path == "/v1/packages":
             refresh = parse_qs(path.query).get("refresh", ["false"])[0] == "true"
             return self.reply(200, package_manager.inspect(refresh))
