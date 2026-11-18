@@ -369,6 +369,7 @@ def backup():
             # Delete only HomeLab-tagged snapshots outside retention policy.
             policy = conf["retention"]
             _run(["restic", "forget", "--tag", "homelabos",
+                  "--group-by", "host,tags",
                   "--keep-daily", str(policy["daily"]),
                   "--keep-weekly", str(policy["weekly"]),
                   "--keep-monthly", str(policy["monthly"]),
