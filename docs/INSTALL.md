@@ -138,3 +138,7 @@ El script realiza una copia coherente de SQLite antes de enviarla cifrada a rest
 Implementado: autenticación inicial y login, panel responsive, métricas Fedora, temperaturas disponibles, disco, procesos, servicios systemd, Docker Manager 2.0 (contenedores, imágenes, redes, volúmenes, proyectos Compose, métricas, logs y acciones opt-in), comprobaciones HTTP, alertas por umbral, historial SQLite y auditoría básica, backup cifrado manual y pruebas CI.
 
 Pendiente para futuras versiones: tareas automáticas, análisis avanzado de seguridad, restauración asistida, asistente IA y administración multi-host.
+
+## Backup & Recovery v0.5
+
+El panel Respaldos permite crear y verificar snapshots cifrados con restic, consultar el inventario de recursos y preparar recuperaciones aisladas. No se habilitan trabajos automáticos durante la instalación. Sigue [Backup & Recovery](BACKUP_RECOVERY.md) para crear un repositorio privado con contraseña local y elegir recursos. [Recovery](RECOVERY.md) explica cómo probar y realizar una recuperación controlada.

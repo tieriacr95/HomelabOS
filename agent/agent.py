@@ -15,12 +15,13 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import unquote, urlsplit, parse_qs
 
 if __package__:
-    from . import docker_manager, package_manager, security_center, enhancements
+    from . import docker_manager, package_manager, security_center, enhancements, backup_manager
 else:
     import docker_manager
     import package_manager
     import security_center
     import enhancements
+    import backup_manager
 
 import psutil
 
@@ -152,6 +153,21 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 return self.reply(500, {"error": "collector_error"})
         path = urlsplit(self.path)
+        if path.path == "/v1/backup/status":
+            return self.reply(200, backup_manager.status())
+        if path.path == "/v1/backup/jobs":
+            return self.reply(200, {"items": backup_manager.jobs()})
+        backup_job = re.fullmatch(r"/v1/backup/jobs/([a-f0-9]{32})", path.path)
+        if backup_job:
+            for job in backup_manager.jobs():
+                if job["id"] == backup_job.group(1):
+                    return self.reply(200, job)
+            return self.reply(404, {"error": "not_found"})
+        if path.path == "/v1/backup/snapshots":
+            try:
+                return self.reply(200, {"items": backup_manager.snapshots()})
+            except backup_manager.BackupError as exc:
+                return self.reply(503, {"error": str(exc)[:180]})
         if path.path == "/v1/extras/postgres":
             return self.reply(200, enhancements.postgres_checks())
         if path.path == "/v1/extras/systemd":
@@ -207,6 +223,26 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if not self.authorized():
             return self.reply(401, {"error": "unauthorized"})
+        backup = re.fullmatch(r"/v1/backup/(backup|verify|restore)", self.path)
+        if backup:
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if length < 0 or length > 512:
+                    return self.reply(413, {"error": "oversized_body"})
+                payload = json.loads(self.rfile.read(length) or b"{}")
+                phrase = payload.get("confirmation_text", "")
+                snapshot = payload.get("snapshot")
+                if not isinstance(phrase, str) or len(phrase) > 130 or (
+                    snapshot is not None and not isinstance(snapshot, str)):
+                    return self.reply(422, {"error": "bad_parameters"})
+                result = backup_manager.start(backup.group(1), phrase, snapshot)
+                return self.reply(202, result)
+            except PermissionError:
+                return self.reply(403, {"error": "explicit_confirmation_required"})
+            except (TypeError, ValueError, AttributeError):
+                return self.reply(422, {"error": "bad_parameters"})
+            except backup_manager.BackupError as exc:
+                return self.reply(409, {"error": str(exc)[:180]})
         sysd = re.fullmatch(r"/v1/extras/systemd/(user|system)/([^/]+)/(start|stop|restart)", self.path)
         if sysd:
             try:

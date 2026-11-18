@@ -14,7 +14,7 @@ Aplicación web oscura y responsive, accesible en **http://localhost:8091**. Tu 
 - **Servicios**: comprobaciones HTTP de endpoints que tú configures y alertas de disponibilidad.
 - **Security Center v0.4**: SELinux, firewalld, configuración efectiva SSH, sockets TCP/UDP, eventos de autenticación agregados, parámetros del kernel, hallazgos e historial; sin cambios automáticos. Sesiones HttpOnly, CSRF y auditoría.
 - **Histórico**: SQLite persistente, muestras de rendimiento y registro de acciones.
-- **Respaldo**: script de copia consistente de SQLite con cifrado restic opcional.
+- **Backup & Recovery v0.5**: SQLite consistente, dumps de PostgreSQL, volúmenes y directorios Docker seleccionados, restic cifrado, programación diaria, retención, verificación profunda y restauración en staging seguro. Sin backups automáticos antes de DNF.
 
 ## Instalación en Fedora
 
@@ -32,7 +32,21 @@ grep '^HOMELAB_SETUP_TOKEN=' .env
 
 **Requisitos:** Fedora Linux, Python 3 + venv, Docker Engine, Docker Compose v2, systemd --user y acceso de tu usuario a Docker. El instalador se ejecuta **sin sudo** y no sobrescribe los tokens existentes.
 
-Consulta **[Guía completa de instalación](docs/INSTALL.md)**, **[Docker Manager](docs/DOCKER_MANAGER.md)** y **[Package Manager](docs/PACKAGE_MANAGER.md)** y **[Security Center](docs/SECURITY_CENTER.md)** y **[Infraestructura](docs/INFRASTRUCTURE.md)** para permisos y operación segura.
+Consulta **[Guía completa de instalación](docs/INSTALL.md)**, **[Docker Manager](docs/DOCKER_MANAGER.md)** y **[Package Manager](docs/PACKAGE_MANAGER.md)** y **[Security Center](docs/SECURITY_CENTER.md)** y **[Infraestructura](docs/INFRASTRUCTURE.md)** y **[Backup & Recovery](docs/BACKUP_RECOVERY.md)** para permisos y operación segura.
+
+## Activar respaldos (opcional)
+
+~~~bash
+sudo dnf install restic
+python3 scripts/setup_backups.py --include-discovered-postgres
+python3 scripts/install_agent.py
+systemctl --user daemon-reload
+systemctl --user restart homelabos-agent
+# Después de configurar los recursos, habilita el timer cuando lo desees:
+python3 scripts/backup_schedule.py --enable 03:00
+~~~
+
+El repositorio restic inicial es local y **debes conservar una copia cifrada externa y la contraseña fuera de Fedora**. No se activan backups al instalar. Consulta [Backup & Recovery](docs/BACKUP_RECOVERY.md) y la [guía de recuperación](docs/RECOVERY.md).
 
 ## Arquitectura
 
@@ -76,7 +90,8 @@ CI en GitHub Actions: pruebas del backend/agente, compilación frontend y build 
 - [x] **Fase C — Security Center**: auditoría de solo lectura, recomendaciones, cobertura e historial
 - [x] **Extras 0.4.2**: SSH privilegiado mínimo opt-in, Postgres readiness, systemd, métricas históricas y TLS
 - [ ] Automatizaciones y notificaciones programadas
-- [ ] Restauración guiada y auditoría de seguridad avanzada
+- [x] **Fase D — Backup & Recovery v0.5**: respaldos cifrados, inventario explícito, retención, programación, comprobación de integridad y restauración guiada sin sobrescritura de producción
+- [ ] Auditoría de seguridad avanzada
 - [ ] Diagnóstico asistido por IA
 - [ ] Administración de múltiples hosts Linux
 

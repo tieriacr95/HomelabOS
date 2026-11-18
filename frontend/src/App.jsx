@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Activity, AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Bell, Box, Check,
-  CheckCircle2, ChevronRight, CircleHelp, Clock3, Container, Cpu, Database, Package,
+  CheckCircle2, ChevronRight, CircleHelp, Clock3, Container, Cpu, Database, Package, Archive,
   ExternalLink, Gauge, HardDrive, HeartPulse, LayoutDashboard, LockKeyhole,
   LogOut, Menu, Monitor, Network, RefreshCw, RotateCw, Server, Settings2,
   Shield, ShieldCheck, Terminal, Thermometer, Wifi, WifiOff, X, Zap
@@ -10,6 +10,7 @@ import DockerManager from './DockerManager.jsx';
 import PackageManager from './PackageManager.jsx';
 import SecurityCenter from './SecurityCenter.jsx';
 import OpsExtras from './OpsExtras.jsx';
+import BackupCenter from './BackupCenter.jsx';
 
 const tabs = [
   { id: 'overview', name: 'Resumen', icon: LayoutDashboard },
@@ -17,6 +18,7 @@ const tabs = [
   { id: 'packages', name: 'Actualizaciones', icon: Package },
   { id: 'docker', name: 'Docker', icon: Container },
   { id: 'extras', name: 'Infraestructura', icon: Server },
+  { id: 'backup', name: 'Respaldos', icon: Archive },
   { id: 'network', name: 'Red y servicios', icon: Network },
   { id: 'security', name: 'Seguridad', icon: ShieldCheck },
   { id: 'audit', name: 'Actividad', icon: Clock3 },
@@ -248,6 +250,7 @@ function App() {
         </>}
         {tab === 'docker' && <DockerManager request={api} csrf={auth.csrf}/>}
         {tab === 'extras' && <OpsExtras request={api} csrf={auth.csrf}/>}
+        {tab === 'backup' && <BackupCenter request={api} csrf={auth.csrf}/>}
         {tab === 'packages' && <PackageManager request={api} csrf={auth.csrf}/>}
         {tab === 'network' && <>
           <Title eyebrow="CONECTIVIDAD" title="Red y servicios" sub="Comprobaciones HTTP y estado de la conectividad del host."/>
@@ -265,7 +268,7 @@ function App() {
           <Panel title="Conexiones" icon={Settings2}><div className="kv"><span>Interfaz web</span><strong>127.0.0.1:8091</strong></div><div className="kv"><span>Agente host</span><Pill positive={agentOnline}>{agentOnline ? 'Conectado' : 'Desconectado'}</Pill></div><div className="kv"><span>Monitores activos</span><strong>{data?.services?.length || 0}</strong></div><div className="kv"><span>Cuenta</span><strong>{auth.username}</strong></div></Panel>
           <Panel title="Próximos pasos" icon={Zap}><div className="settings-steps"><div><span>01</span><p><strong>Conecta el agente:</strong> ejecuta bash scripts/install.sh desde Fedora.</p></div><div><span>02</span><p><strong>Servicios:</strong> edita config/services.json para activar las verificaciones de Plex y tus aplicaciones.</p></div><div><span>03</span><p><strong>Reinicios:</strong> agrega nombres a HOMELAB_ALLOWED_CONTAINERS en .env y reinstala el agente.</p></div><div><span>04</span><p><strong>Acceso externo:</strong> configura Cloudflare Tunnel + Access antes de habilitar acceso desde Internet.</p></div></div></Panel>
         </>}
-        <footer className="footer"><span>HomeLab OS v0.4.2</span><span>Diseñado para Fedora Linux · Actualización automática cada 20 s</span></footer>
+        <footer className="footer"><span>HomeLab OS v0.5.0</span><span>Diseñado para Fedora Linux · Actualización automática cada 20 s</span></footer>
       </div>
     </main>
     {restart && <div className="modal-overlay" role="presentation" onClick={() => setRestart(null)}><div className="modal" role="dialog" aria-modal="true" aria-label="Confirmar reinicio" onClick={e => e.stopPropagation()}><div className="modal-icon"><RotateCw size={24}/></div><h3>¿Reiniciar contenedor?</h3><p>Se reiniciará <strong>{restart}</strong>. Esto puede interrumpir temporalmente el servicio.</p><div className="modal-buttons"><button className="btn secondary" onClick={() => setRestart(null)}>Cancelar</button><button className="btn primary" disabled={busy} onClick={doRestart}>Sí, reiniciar</button></div></div></div>}

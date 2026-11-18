@@ -23,6 +23,7 @@ from .docker_api import make_router
 from .package_api import make_router as make_package_router
 from .security_api import make_router as make_security_router
 from .extras_api import make_router as make_extras_router
+from .backup_api import make_router as make_backup_router
 
 AGENT = os.getenv("HOMELAB_AGENT_URL", "http://127.0.0.1:18765").rstrip("/")
 AGENT_TOKEN = os.getenv("HOMELAB_AGENT_TOKEN", "")
@@ -120,7 +121,7 @@ def establish_session(response: Response, username: str):
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "version": "0.4.2"}
+    return {"status": "ok", "version": "0.5.0"}
 
 
 @app.get("/api/auth/status")
@@ -280,6 +281,8 @@ async def restart_container(name: str, body: ConfirmBody, user=Depends(csrf_user
 app.include_router(make_router(current_user, csrf_user, lambda *args, **kwargs: agent_request(*args, **kwargs), store))
 app.include_router(make_package_router(current_user, csrf_user, lambda *args, **kwargs: agent_request(*args, **kwargs), store))
 app.include_router(make_security_router(current_user, lambda *args, **kwargs: agent_request(*args, **kwargs), store))
+app.include_router(make_backup_router(current_user, csrf_user,
+    lambda *args, **kwargs: agent_request(*args, **kwargs), store))
 app.include_router(make_extras_router(current_user, csrf_user,
     lambda *args, **kwargs: agent_request(*args, **kwargs), store,
     SERVICES_PATH, Path(os.getenv("HOMELAB_TLS_PATH", "/config/tls_endpoints.json"))))
